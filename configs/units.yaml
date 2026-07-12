@@ -1,0 +1,227 @@
+version: "1.0"
+
+canonical_units:
+
+  power:
+    kilowatt:
+      symbol: kW
+      description: Instantaneous active power
+      base_unit: W
+      conversion_factor_to_base: 1000
+
+    megawatt:
+      symbol: MW
+      description: Instantaneous active power
+      base_unit: W
+      conversion_factor_to_base: 1000000
+
+  energy:
+    kilowatt_hour:
+      symbol: kWh
+      description: Electrical energy accumulated over time
+      base_unit: Wh
+      conversion_factor_to_base: 1000
+
+    megawatt_hour:
+      symbol: MWh
+      description: Electrical energy accumulated over time
+      base_unit: Wh
+      conversion_factor_to_base: 1000000
+
+  voltage:
+    volt:
+      symbol: V
+      description: Electrical potential difference
+      base_unit: V
+      conversion_factor_to_base: 1
+
+  current:
+    ampere:
+      symbol: A
+      description: Electrical current
+      base_unit: A
+      conversion_factor_to_base: 1
+
+  frequency:
+    hertz:
+      symbol: Hz
+      description: Electrical frequency
+      base_unit: Hz
+      conversion_factor_to_base: 1
+
+  reactive_power:
+    kilovar:
+      symbol: kvar
+      description: Reactive power
+      base_unit: var
+      conversion_factor_to_base: 1000
+
+  apparent_power:
+    kilovolt_ampere:
+      symbol: kVA
+      description: Apparent power
+      base_unit: VA
+      conversion_factor_to_base: 1000
+
+  irradiance:
+    watt_per_square_meter:
+      symbol: W/m²
+      description: Solar irradiance
+      base_unit: W/m²
+      conversion_factor_to_base: 1
+
+  temperature:
+    degree_celsius:
+      symbol: °C
+      description: Temperature in degrees Celsius
+      base_unit: °C
+      conversion_factor_to_base: 1
+
+  duration:
+    minute:
+      symbol: min
+      description: Time duration in minutes
+      base_unit: seconds
+      conversion_factor_to_base: 60
+
+    hour:
+      symbol: h
+      description: Time duration in hours
+      base_unit: seconds
+      conversion_factor_to_base: 3600
+
+  currency:
+    us_dollar:
+      symbol: USD
+      description: United States Dollar
+      base_unit: USD
+      conversion_factor_to_base: 1
+
+measurement_semantics:
+
+  instantaneous_power:
+    accepted_units:
+      - kW
+      - MW
+    description: Power measured at a specific timestamp.
+
+  interval_energy:
+    accepted_units:
+      - kWh
+      - MWh
+    description: Energy accumulated during a defined interval.
+
+capacity_conventions:
+
+  dc_capacity:
+    canonical_unit: MWp
+    description: Installed photovoltaic module capacity under standard test conditions.
+
+  ac_capacity:
+    canonical_unit: MW
+    description: Maximum inverter or grid export capacity.
+
+timestamp_conventions:
+
+  timezone: UTC
+
+  interval_labeling: interval_end
+
+  interval_description: >
+    Each telemetry timestamp represents the end of the measurement interval.
+
+  example:
+    timestamp: "2025-01-01T00:15:00Z"
+    interval_start: "2025-01-01T00:00:00Z"
+    interval_end: "2025-01-01T00:15:00Z"
+
+meter_reset_handling:
+
+  cumulative_energy_rule: >
+    Cumulative energy values should normally be non-decreasing.
+
+  reset_detection_rule: >
+    A negative change greater than the configured tolerance is classified as a meter reset.
+
+  reset_tolerance_kwh: 1.0
+
+  action: >
+    Preserve the raw value, flag the reset event, and calculate interval energy using reset-aware logic.
+
+valid_ranges:
+
+  ac_power_kw:
+    minimum: 0
+    maximum_multiplier_of_rated_power: 1.10
+
+  dc_power_kw:
+    minimum: 0
+    maximum_multiplier_of_rated_power: 1.25
+
+  ac_voltage_v:
+    minimum: 0
+    maximum: 1500
+
+  dc_voltage_v:
+    minimum: 0
+    maximum: 2000
+
+  current_a:
+    minimum: 0
+    maximum: 5000
+
+  frequency_hz:
+    minimum: 45
+    maximum: 55
+
+  power_factor:
+    minimum: -1
+    maximum: 1
+
+  reactive_power_kvar:
+    minimum: -10000
+    maximum: 10000
+
+  irradiance_wm2:
+    minimum: 0
+    maximum: 1400
+
+  ambient_temperature_c:
+    minimum: -20
+    maximum: 60
+
+  module_temperature_c:
+    minimum: -20
+    maximum: 90
+
+  communication_quality_pct:
+    minimum: 0
+    maximum: 100
+
+equipment_states:
+
+  - AVAILABLE
+  - RUNNING
+  - STANDBY
+  - DERATED
+  - CURTAILED
+  - PLANNED_OUTAGE
+  - FORCED_OUTAGE
+  - GRID_UNAVAILABLE
+  - COMMUNICATION_LOSS
+  - MAINTENANCE
+  - UNKNOWN
+
+loss_categories:
+
+  - GRID_OUTAGE
+  - INVERTER_OUTAGE
+  - TRANSFORMER_OUTAGE
+  - CURTAILMENT
+  - SOILING
+  - THERMAL_DERATING
+  - CLIPPING
+  - COMMUNICATION_UNCERTAINTY
+  - SENSOR_UNCERTAINTY
+  - PLANNED_MAINTENANCE
+  - UNEXPLAINED_UNDERPERFORMANCE
