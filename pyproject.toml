@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "energy-operations-intelligence-platform"
+version = "0.1.0"
+description = "Production-inspired energy operations analytics and decision-support platform."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+authors = [
+    { name = "Aleeza Iftikhar" }
+]
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["src*", "app*", "api*"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+exclude = [
+    ".venv",
+    "data",
+    "logs",
+    "models",
+    "reports"
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM"
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.13"
+check_untyped_defs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_optional = true
+exclude = [
+    "notebooks",
+    "data",
+    "migrations"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config"
+]
+
+[tool.coverage.run]
+source = ["src", "app", "api"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 70

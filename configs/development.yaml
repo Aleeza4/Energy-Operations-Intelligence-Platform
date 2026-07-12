@@ -1,0 +1,18 @@
+environment: development
+
+application:
+  name: Energy Operations Intelligence Platform
+  debug: true
+
+paths:
+  raw_data: data/raw
+  cleaned_data: data/cleaned
+  processed_data: data/processed
+  logs: logs
+  models: models
+
+logging:
+  level: DEBUG
+  json_output: true
+
+random_seed: 42

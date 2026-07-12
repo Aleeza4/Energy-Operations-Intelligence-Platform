@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# VS Code and IDE
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# Generated data
+data/raw/*
+data/rejected/*
+data/cleaned/*
+data/processed/*
+!data/raw/.gitkeep
+!data/rejected/.gitkeep
+!data/cleaned/.gitkeep
+!data/processed/.gitkeep
+!data/sample/.gitkeep
+!data/README.md
+
+# Model artifacts
+models/*
+!models/registry.json
+!models/.gitkeep
+*.pkl
+*.joblib
+*.onnx
+
+# Generated reports
+reports/*.pdf
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Build files
+build/
+dist/
+*.egg-info/
+
+# Operating system
+.DS_Store
+Thumbs.db

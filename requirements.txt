@@ -1,0 +1,8 @@
+pandas
+numpy
+pyarrow
+PyYAML
+python-dotenv
+pydantic
+pydantic-settings
+structlog
