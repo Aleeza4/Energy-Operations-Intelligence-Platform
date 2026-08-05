@@ -1,0 +1,42 @@
+# ============================================================
+# Energy Operations Intelligence Platform (EOIP)
+# Python Dependencies
+# Phase 1 - Repository & Engineering Foundation
+# ============================================================
+
+# ----------------------------
+# Data Processing
+# ----------------------------
+pandas
+numpy
+
+# ----------------------------
+# Database
+# ----------------------------
+SQLAlchemy
+psycopg2-binary
+
+# ----------------------------
+# Visualization
+# ----------------------------
+plotly
+streamlit
+
+# ----------------------------
+# Machine Learning
+# ----------------------------
+scikit-learn
+prophet
+
+# ----------------------------
+# API
+# ----------------------------
+fastapi
+uvicorn
+
+# ----------------------------
+# Configuration & Logging
+# ----------------------------
+python-dotenv
+loguru
+pydantic
