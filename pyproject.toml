@@ -27,6 +27,7 @@ dependencies = [
     "fastapi",
     "loguru",
     "numpy",
+    "prefect",
     "pandas",
     "plotly",
     "prophet",
@@ -44,6 +45,7 @@ dependencies = [
 dev = [
     "black",
     "pytest",
+    "PyYAML",
     "ruff",
 ]
 
@@ -143,3 +145,4 @@ exclude = [
     "^build/",
     "^dist/",
 ]
+

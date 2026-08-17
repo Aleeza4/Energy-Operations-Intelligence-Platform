@@ -57,13 +57,10 @@ class WeatherObservation:
 
         if not _PLANT_ID_PATTERN.fullmatch(normalized_plant_id):
             raise ValueError(
-                f"Invalid plant_id '{self.plant_id}'. "
-                "Use the format 'PLANT-001'."
+                f"Invalid plant_id '{self.plant_id}'. " "Use the format 'PLANT-001'."
             )
 
-        if not _WEATHER_STATION_ID_PATTERN.fullmatch(
-            normalized_weather_station_id
-        ):
+        if not _WEATHER_STATION_ID_PATTERN.fullmatch(normalized_weather_station_id):
             raise ValueError(
                 f"Invalid weather_station_id '{self.weather_station_id}'. "
                 "Use the format 'WS-001'."
@@ -75,10 +72,7 @@ class WeatherObservation:
                 f"{self.weather_station_id}. Use a datetime value."
             )
 
-        if (
-            self.timestamp.tzinfo is None
-            or self.timestamp.utcoffset() is None
-        ):
+        if self.timestamp.tzinfo is None or self.timestamp.utcoffset() is None:
             raise ValueError(
                 f"Timestamp '{self.timestamp}' for "
                 f"{self.weather_station_id} is timezone-naive. "
@@ -191,8 +185,6 @@ class WeatherObservation:
         record = asdict(self)
         record["timestamp"] = self.timestamp.isoformat()
         record["quality"] = self.quality.value
-        record["total_horizontal_irradiance"] = (
-            self.total_horizontal_irradiance
-        )
+        record["total_horizontal_irradiance"] = self.total_horizontal_irradiance
         record["is_daylight"] = self.is_daylight
         return record

@@ -466,10 +466,10 @@ def build_event_mask(
         return mask
 
     if scope_column not in frame.columns:
-        raise ValueError(
-            f"Frame is missing scope column '{scope_column}' "
-            f"for event {event.ground_truth_event_id}."
-        )
+        # The event targets an asset hierarchy level that is not present in
+        # this frame (e.g. an inverter-scoped event applied to plant SCADA).
+        # Such events do not apply to this target, so return a no-match mask.
+        return pd.Series(False, index=frame.index)
 
     mask &= frame[scope_column].astype(str).str.upper() == event.asset_id.upper()
     return mask

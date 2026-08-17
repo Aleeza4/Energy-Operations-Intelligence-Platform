@@ -71,8 +71,7 @@ class SCADAObservation:
 
         if not _PLANT_ID_PATTERN.fullmatch(normalized_plant_id):
             raise ValueError(
-                f"Invalid plant_id '{self.plant_id}'. "
-                "Use the format 'PLANT-001'."
+                f"Invalid plant_id '{self.plant_id}'. " "Use the format 'PLANT-001'."
             )
 
         if not _EQUIPMENT_ID_PATTERN.fullmatch(normalized_equipment_id):
@@ -322,8 +321,6 @@ class SCADAObservation:
         record["operating_state"] = self.operating_state.value
         record["quality"] = self.quality.value
         record["is_exporting"] = self.is_exporting
-        record["calculated_interval_energy_kwh"] = (
-            self.calculated_interval_energy_kwh
-        )
+        record["calculated_interval_energy_kwh"] = self.calculated_interval_energy_kwh
         record["energy_deviation_kwh"] = self.energy_deviation_kwh
         return record

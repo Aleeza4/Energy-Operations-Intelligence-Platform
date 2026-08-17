@@ -228,7 +228,7 @@ def test_timestamps_follow_configured_interval() -> None:
 
     assert all(
         later - earlier == timedelta(minutes=30)
-        for earlier, later in zip(timestamps, timestamps[1:])
+        for earlier, later in zip(timestamps, timestamps[1:], strict=False)
     )
 
 
