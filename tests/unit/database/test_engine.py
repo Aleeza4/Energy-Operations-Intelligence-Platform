@@ -23,12 +23,13 @@ def test_create_engine_with_default_configuration() -> None:
     assert result is mock_engine
 
     mocked_create_engine.assert_called_once_with(
-        "postgresql+psycopg://" "postgres:postgres@localhost:5432/eoip",
+        "postgresql+psycopg2://" "postgres:postgres@localhost:5432/eoip",
         echo=False,
         pool_size=10,
         max_overflow=20,
         pool_timeout=30,
         pool_recycle=1800,
+        pool_pre_ping=True,
         future=True,
     )
 
@@ -58,7 +59,7 @@ def test_create_engine_with_custom_configuration() -> None:
     assert result is mock_engine
 
     mocked_create_engine.assert_called_once_with(
-        "postgresql+psycopg://"
+        "postgresql+psycopg2://"
         "eoip_user:secure-password"
         "@database.example.com:6543/energy_operations",
         echo=True,
@@ -66,6 +67,7 @@ def test_create_engine_with_custom_configuration() -> None:
         max_overflow=8,
         pool_timeout=15,
         pool_recycle=900,
+        pool_pre_ping=True,
         future=True,
     )
 

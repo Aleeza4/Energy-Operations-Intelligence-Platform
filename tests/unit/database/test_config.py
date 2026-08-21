@@ -29,7 +29,7 @@ def test_connection_url() -> None:
     config = DatabaseConfig()
 
     assert (
-        config.connection_url == "postgresql+psycopg://"
+        config.connection_url == "postgresql+psycopg2://"
         "postgres:postgres@localhost:5432/eoip"
     )
 
@@ -62,6 +62,6 @@ def test_custom_configuration() -> None:
     assert config.pool_recycle == 600
 
     assert (
-        config.connection_url == "postgresql+psycopg://"
+        config.connection_url == "postgresql+psycopg2://"
         "admin:secret@db.example.com:6543/energy_db"
     )

@@ -8,21 +8,13 @@ import streamlit as st
 
 from eoip.app.components import (
     MetricCard,
-    format_filter_caption,
-    render_csv_download,
-    render_dataframe,
-    render_global_filters,
     render_metric_row,
     render_page_intro,
-    render_plotly_chart,
     render_section_header,
     render_status,
 )
-from eoip.app.data_filters import apply_dataframe_filters
-from eoip.app.navigation import navigate_to
 
 
-@st.cache_data(show_spinner=False)
 def _portfolio_performance_data() -> pd.DataFrame:
     """Return temporary portfolio-performance data for the UI."""
     return pd.DataFrame(
@@ -55,7 +47,6 @@ def _portfolio_performance_data() -> pd.DataFrame:
     )
 
 
-@st.cache_data(show_spinner=False)
 def _risk_data() -> pd.DataFrame:
     """Return temporary operational-risk data for the UI."""
     return pd.DataFrame(
@@ -76,7 +67,6 @@ def _risk_data() -> pd.DataFrame:
     )
 
 
-@st.cache_data(show_spinner=False)
 def _recommendation_data() -> pd.DataFrame:
     """Return temporary executive recommendation data."""
     return pd.DataFrame(
@@ -115,11 +105,11 @@ def render() -> None:
         title="Executive Dashboard",
         icon="📊",
         description=(
-            "Portfolio-level operational, financial, and " "asset-health intelligence."
+            "Portfolio-level operational, financial, and "
+            "asset-health intelligence."
         ),
     )
-    filters = render_global_filters()
-    st.caption(format_filter_caption(filters, show_equipment=False))
+    
 
     render_status(
         "Portfolio intelligence is operational.",
@@ -128,7 +118,9 @@ def render() -> None:
 
     render_section_header(
         "Portfolio Overview",
-        description=("High-level indicators across the renewable-energy portfolio."),
+        description=(
+            "High-level indicators across the renewable-energy portfolio."
+        ),
     )
 
     render_metric_row(
@@ -155,21 +147,27 @@ def render() -> None:
                 label="Recoverable Opportunity",
                 value="$44.7K",
                 delta="+8.3%",
-                help_text=("Estimated recoverable financial opportunity."),
+                help_text=(
+                    "Estimated recoverable financial opportunity."
+                ),
             ),
         )
     )
 
     st.write("")
 
-    performance = apply_dataframe_filters(_portfolio_performance_data(), filters)
+    performance = _portfolio_performance_data()
 
-    left_column, right_column = st.columns((2, 1))
+    left_column, right_column = st.columns(
+        (2, 1)
+    )
 
     with left_column:
         render_section_header(
             "Plant Performance",
-            description=("Actual versus expected energy generation."),
+            description=(
+                "Actual versus expected energy generation."
+            ),
         )
 
         performance_long = performance.melt(
@@ -200,15 +198,17 @@ def render() -> None:
             legend_title_text="",
         )
 
-        render_plotly_chart(
+        st.plotly_chart(
             figure,
-            data=performance_long,
+            width="stretch",
         )
 
     with right_column:
         render_section_header(
             "Asset Health",
-            description=("Current equipment risk distribution."),
+            description=(
+                "Current equipment risk distribution."
+            ),
         )
 
         risk = _risk_data()
@@ -230,57 +230,41 @@ def render() -> None:
             legend_title_text="",
         )
 
-        render_plotly_chart(
+        st.plotly_chart(
             risk_figure,
-            data=risk,
+            width="stretch",
         )
 
     render_section_header(
         "Performance by Plant",
-        description=("Portfolio performance indicators for executive review."),
+        description=(
+            "Portfolio performance indicators for executive review."
+        ),
     )
 
-    render_dataframe(
+    st.dataframe(
         performance,
+        width="stretch",
+        hide_index=True,
     )
-    render_csv_download(
-        performance,
-        label="Download plant performance CSV",
-        report_name="executive-plant-performance",
-        filters=filters,
-        key="executive_performance_download",
-    )
-
-    if not performance.empty:
-        with st.container(horizontal=True, vertical_alignment="bottom"):
-            selected_plant = st.selectbox(
-                "Plant drill-down",
-                options=performance["Plant"].tolist(),
-                key="executive_drilldown_plant",
-            )
-            if st.button("View plant", key="executive_view_plant"):
-                navigate_to("plant_performance", plant=selected_plant)
 
     render_section_header(
         "Priority Recommendations",
-        description=("Highest-value operational actions identified by EOIP."),
+        description=(
+            "Highest-value operational actions identified by EOIP."
+        ),
     )
 
-    recommendations = apply_dataframe_filters(_recommendation_data(), filters)
+    recommendations = _recommendation_data()
 
-    render_dataframe(
+    st.dataframe(
         recommendations,
+        width="stretch",
+        hide_index=True,
         column_config={
             "Estimated Impact ($)": st.column_config.NumberColumn(
                 "Estimated Impact ($)",
                 format="$%.0f",
             )
         },
-    )
-    render_csv_download(
-        recommendations,
-        label="Download recommendations CSV",
-        report_name="executive-recommendations",
-        filters=filters,
-        key="executive_recommendations_download",
     )

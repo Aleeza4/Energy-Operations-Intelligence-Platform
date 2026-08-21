@@ -25,6 +25,7 @@ keywords = [
 
 dependencies = [
     "fastapi",
+    "httpx",
     "loguru",
     "numpy",
     "prefect",
@@ -34,6 +35,7 @@ dependencies = [
     "psycopg2-binary",
     "pydantic",
     "python-dotenv",
+    "python-multipart",
     "scikit-learn",
     "sqlalchemy",
     "streamlit",
