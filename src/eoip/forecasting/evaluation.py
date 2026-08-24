@@ -140,13 +140,11 @@ def evaluate_forecast(
         ),
         sample_count=len(actual_values),
     )
+
     @property
     def precision(self) -> float:
         """Return anomaly detection precision."""
-        denominator = (
-            self.true_positives
-            + self.false_positives
-        )
+        denominator = self.true_positives + self.false_positives
 
         if denominator == 0:
             return 0.0
@@ -156,10 +154,7 @@ def evaluate_forecast(
     @property
     def recall(self) -> float:
         """Return anomaly detection recall."""
-        denominator = (
-            self.true_positives
-            + self.false_negatives
-        )
+        denominator = self.true_positives + self.false_negatives
 
         if denominator == 0:
             return 0.0
@@ -169,10 +164,7 @@ def evaluate_forecast(
     @property
     def specificity(self) -> float:
         """Return true-negative rate."""
-        denominator = (
-            self.true_negatives
-            + self.false_positives
-        )
+        denominator = self.true_negatives + self.false_positives
 
         if denominator == 0:
             return 0.0
@@ -183,15 +175,10 @@ def evaluate_forecast(
     def f1_score(self) -> float:
         """Return harmonic mean of precision and recall."""
         denominator = (
-            2 * self.true_positives
-            + self.false_positives
-            + self.false_negatives
+            2 * self.true_positives + self.false_positives + self.false_negatives
         )
 
         if denominator == 0:
             return 0.0
 
-        return (
-            2 * self.true_positives
-            / denominator
-        )
+        return 2 * self.true_positives / denominator

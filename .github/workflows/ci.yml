@@ -1,0 +1,109 @@
+name: EOIP Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-tests:
+    name: Quality and Test Suite
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 45
+
+    services:
+      timescaledb:
+        image: timescale/timescaledb:latest-pg16
+
+        env:
+          POSTGRES_DB: eoip
+          POSTGRES_USER: eoip_user
+          POSTGRES_PASSWORD: eoip_password
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd="pg_isready -U eoip_user -d eoip"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      EOIP_DATABASE_URL: postgresql+psycopg2://eoip_user:eoip_password@127.0.0.1:5432/eoip
+
+      EOIP_DATABASE_HOST: 127.0.0.1
+      EOIP_DATABASE_PORT: "5432"
+      EOIP_DATABASE_NAME: eoip
+      EOIP_DATABASE_USER: eoip_user
+      EOIP_DATABASE_PASSWORD: eoip_password
+
+      EOIP_API_ENVIRONMENT: ci
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Upgrade packaging tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+
+      - name: Install EOIP and development dependencies
+        run: |
+          python -m pip install -e ".[dev]"
+
+      - name: Verify Python environment
+        run: |
+          python --version
+          python -m pip --version
+          python -c "import eoip; print('EOIP import successful:', eoip.__file__)"
+
+      - name: Ruff
+        run: |
+          python -m ruff check src tests
+
+      - name: Black
+        run: |
+          python -m black --check src tests
+
+      - name: Verify TimescaleDB connection
+        run: |
+          python -c "import psycopg2; c=psycopg2.connect(host='127.0.0.1',port=5432,dbname='eoip',user='eoip_user',password='eoip_password'); print('CI DATABASE CONNECTED'); c.close()"
+
+      - name: Apply database migrations
+        run: |
+          python -m alembic upgrade head
+
+      - name: Verify Alembic revision
+        run: |
+          python -m alembic current
+
+      - name: Verify TimescaleDB extension
+        run: |
+          python -c "import psycopg2; c=psycopg2.connect(host='127.0.0.1',port=5432,dbname='eoip',user='eoip_user',password='eoip_password'); cur=c.cursor(); cur.execute(\"SELECT extversion FROM pg_extension WHERE extname='timescaledb'\"); print('TimescaleDB:', cur.fetchone()); cur.close(); c.close()"
+
+      - name: Run EOIP test suite
+        run: |
+          python -m pytest -q -p no:cacheprovider

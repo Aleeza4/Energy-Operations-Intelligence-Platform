@@ -105,11 +105,9 @@ def render() -> None:
         title="Executive Dashboard",
         icon="📊",
         description=(
-            "Portfolio-level operational, financial, and "
-            "asset-health intelligence."
+            "Portfolio-level operational, financial, and " "asset-health intelligence."
         ),
     )
-    
 
     render_status(
         "Portfolio intelligence is operational.",
@@ -118,9 +116,7 @@ def render() -> None:
 
     render_section_header(
         "Portfolio Overview",
-        description=(
-            "High-level indicators across the renewable-energy portfolio."
-        ),
+        description=("High-level indicators across the renewable-energy portfolio."),
     )
 
     render_metric_row(
@@ -147,9 +143,7 @@ def render() -> None:
                 label="Recoverable Opportunity",
                 value="$44.7K",
                 delta="+8.3%",
-                help_text=(
-                    "Estimated recoverable financial opportunity."
-                ),
+                help_text=("Estimated recoverable financial opportunity."),
             ),
         )
     )
@@ -158,16 +152,12 @@ def render() -> None:
 
     performance = _portfolio_performance_data()
 
-    left_column, right_column = st.columns(
-        (2, 1)
-    )
+    left_column, right_column = st.columns((2, 1))
 
     with left_column:
         render_section_header(
             "Plant Performance",
-            description=(
-                "Actual versus expected energy generation."
-            ),
+            description=("Actual versus expected energy generation."),
         )
 
         performance_long = performance.melt(
@@ -206,9 +196,7 @@ def render() -> None:
     with right_column:
         render_section_header(
             "Asset Health",
-            description=(
-                "Current equipment risk distribution."
-            ),
+            description=("Current equipment risk distribution."),
         )
 
         risk = _risk_data()
@@ -237,9 +225,7 @@ def render() -> None:
 
     render_section_header(
         "Performance by Plant",
-        description=(
-            "Portfolio performance indicators for executive review."
-        ),
+        description=("Portfolio performance indicators for executive review."),
     )
 
     st.dataframe(
@@ -250,9 +236,7 @@ def render() -> None:
 
     render_section_header(
         "Priority Recommendations",
-        description=(
-            "Highest-value operational actions identified by EOIP."
-        ),
+        description=("Highest-value operational actions identified by EOIP."),
     )
 
     recommendations = _recommendation_data()

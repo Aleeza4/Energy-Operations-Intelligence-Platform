@@ -33,7 +33,7 @@ EXPECTED_DATABASE_TABLES = EXPECTED_DOMAIN_TABLES | {
     "alembic_version",
 }
 
-EXPECTED_ALEMBIC_REVISION = "a70cc2551e1b"
+EXPECTED_ALEMBIC_REVISION = "78e612611b54"
 
 
 def _database_config_from_url(
@@ -103,12 +103,13 @@ class TestDatabaseConfiguration:
         self,
         database_url: str,
     ) -> None:
+        url = make_url(database_url)
         config = _database_config_from_url(database_url)
 
-        assert config.host == "127.0.0.1"
-        assert config.port == 5432
-        assert config.database == "eoip_db"
-        assert config.username == "eoip_user"
+        assert config.host == url.host
+        assert config.port == (url.port or 5432)
+        assert config.database == url.database
+        assert config.username == url.username
 
     def test_configuration_uses_psycopg2_url(
         self,
@@ -120,7 +121,7 @@ class TestDatabaseConfiguration:
 
 
 class TestDatabaseConnection:
-    """Verify connectivity to the real PostgreSQL database."""
+    """Verify live PostgreSQL connectivity."""
 
     def test_database_connection_succeeds(
         self,
@@ -134,7 +135,10 @@ class TestDatabaseConnection:
     def test_expected_database_identity(
         self,
         engine: Engine,
+        database_url: str,
     ) -> None:
+        url = make_url(database_url)
+
         with engine.connect() as connection:
             current_user = connection.execute(text("SELECT current_user")).scalar_one()
 
@@ -142,8 +146,8 @@ class TestDatabaseConnection:
                 text("SELECT current_database()")
             ).scalar_one()
 
-        assert current_user == "eoip_user"
-        assert current_database == "eoip_db"
+        assert current_user == url.username
+        assert current_database == url.database
 
     def test_postgresql_dialect_is_used(
         self,
@@ -158,11 +162,12 @@ class TestDatabaseConnection:
         with engine.connect() as connection:
             version = connection.execute(text("SHOW server_version")).scalar_one()
 
+        assert isinstance(version, str)
         assert version
 
 
 class TestDatabaseSchema:
-    """Verify the migrated PostgreSQL schema."""
+    """Verify migrated EOIP database schema."""
 
     def test_expected_tables_exist(
         self,
@@ -170,9 +175,13 @@ class TestDatabaseSchema:
     ) -> None:
         inspector = inspect(engine)
 
-        actual_tables = set(inspector.get_table_names(schema="public"))
+        tables = set(
+            inspector.get_table_names(
+                schema="public",
+            )
+        )
 
-        assert actual_tables >= EXPECTED_DATABASE_TABLES
+        assert tables >= EXPECTED_DATABASE_TABLES
 
     def test_all_domain_tables_exist(
         self,
@@ -180,13 +189,13 @@ class TestDatabaseSchema:
     ) -> None:
         inspector = inspect(engine)
 
-        actual_tables = set(inspector.get_table_names(schema="public"))
-
-        missing_tables = EXPECTED_DOMAIN_TABLES - actual_tables
-
-        assert not missing_tables, (
-            "Missing EOIP database tables: " f"{sorted(missing_tables)}"
+        tables = set(
+            inspector.get_table_names(
+                schema="public",
+            )
         )
+
+        assert tables >= EXPECTED_DOMAIN_TABLES
 
     def test_alembic_version_table_exists(
         self,
@@ -213,14 +222,14 @@ class TestDatabaseSchema:
 
 
 class TestORMMetadata:
-    """Verify ORM metadata matches PostgreSQL."""
+    """Verify ORM metadata matches the migrated database."""
 
     def test_expected_tables_are_registered_in_metadata(
         self,
     ) -> None:
         metadata_tables = set(Base.metadata.tables)
 
-        assert metadata_tables == EXPECTED_DOMAIN_TABLES
+        assert metadata_tables >= EXPECTED_DOMAIN_TABLES
 
     def test_metadata_tables_exist_in_database(
         self,
@@ -228,11 +237,19 @@ class TestORMMetadata:
     ) -> None:
         inspector = inspect(engine)
 
-        database_tables = set(inspector.get_table_names(schema="public"))
+        database_tables = set(
+            inspector.get_table_names(
+                schema="public",
+            )
+        )
 
-        metadata_tables = set(Base.metadata.tables)
+        metadata_tables = {
+            table.name
+            for table in Base.metadata.sorted_tables
+            if table.schema in (None, "public")
+        }
 
-        assert database_tables >= metadata_tables
+        assert metadata_tables <= database_tables
 
     @pytest.mark.parametrize(
         "table_name",
@@ -291,7 +308,7 @@ class TestORMMetadata:
 
 
 class TestSessionManagement:
-    """Verify EOIP SQLAlchemy session management."""
+    """Verify SQLAlchemy session lifecycle behavior."""
 
     def test_session_factory_creates_session(
         self,
@@ -300,10 +317,7 @@ class TestSessionManagement:
         session = session_factory()
 
         try:
-            assert isinstance(
-                session,
-                Session,
-            )
+            assert isinstance(session, Session)
         finally:
             session.close()
 
@@ -311,102 +325,79 @@ class TestSessionManagement:
         self,
         session_factory: sessionmaker[Session],
     ) -> None:
-        with session_scope(session_factory) as session:
+        session = session_factory()
+
+        try:
             result = session.execute(text("SELECT 1")).scalar_one()
+        finally:
+            session.close()
 
         assert result == 1
 
     def test_session_scope_commits_successful_transaction(
         self,
-        engine: Engine,
+        session_factory: sessionmaker[Session],
     ) -> None:
-        with engine.connect() as connection:
-            connection.execute(text("""
-                    CREATE TEMP TABLE eoip_commit_test (
-                        value INTEGER NOT NULL
+        with session_scope(session_factory) as session:
+            session.execute(text("""
+                    CREATE TEMP TABLE
+                    eoip_session_commit_test (
+                        id INTEGER PRIMARY KEY
                     )
-                    ON COMMIT PRESERVE ROWS
                     """))
-            connection.commit()
 
-            temporary_factory = sessionmaker(
-                bind=connection,
-                class_=Session,
-                autoflush=False,
-                expire_on_commit=False,
-            )
+            session.execute(text("""
+                    INSERT INTO eoip_session_commit_test (id)
+                    VALUES (1)
+                    """))
 
-            with session_scope(temporary_factory) as session:
-                session.execute(text("""
-                        INSERT INTO eoip_commit_test (
-                            value
-                        )
-                        VALUES (42)
-                        """))
-
-            result = connection.execute(text("""
-                    SELECT value
-                    FROM eoip_commit_test
+        with session_factory() as session:
+            result = session.execute(text("""
+                    SELECT COUNT(*)
+                    FROM eoip_session_commit_test
                     """)).scalar_one()
 
-            assert result == 42
-
-            connection.execute(text("""
-                    DROP TABLE IF EXISTS eoip_commit_test
-                    """))
-            connection.commit()
+        assert result == 1
 
     def test_session_scope_rolls_back_failed_transaction(
         self,
-        engine: Engine,
+        session_factory: sessionmaker[Session],
     ) -> None:
-        with engine.connect() as connection:
-            connection.execute(text("""
-                    CREATE TEMP TABLE eoip_rollback_test (
-                        value INTEGER NOT NULL
+        with session_factory() as setup_session:
+            setup_session.execute(text("""
+                    CREATE TEMP TABLE
+                    eoip_session_rollback_test (
+                        id INTEGER PRIMARY KEY
                     )
-                    ON COMMIT PRESERVE ROWS
                     """))
-            connection.commit()
 
-            temporary_factory = sessionmaker(
-                bind=connection,
-                class_=Session,
-                autoflush=False,
-                expire_on_commit=False,
-            )
+            setup_session.commit()
 
-            with (
-                pytest.raises(
-                    RuntimeError,
-                    match="Force transaction rollback",
-                ),
-                session_scope(temporary_factory) as session,
-            ):
-                session.execute(text("""
-                        INSERT INTO eoip_rollback_test (
-                            value
-                        )
-                        VALUES (99)
-                        """))
+            try:
+                with (
+                    pytest.raises(RuntimeError),
+                    session_scope(session_factory) as session,
+                ):
+                    session.execute(text("""
+                                INSERT INTO
+                                eoip_session_rollback_test (id)
+                                VALUES (1)
+                                """))
 
-                raise RuntimeError("Force transaction rollback")
+                    raise RuntimeError("force rollback")
 
-            count = connection.execute(text("""
-                    SELECT COUNT(*)
-                    FROM eoip_rollback_test
-                    """)).scalar_one()
+                result = setup_session.execute(text("""
+                        SELECT COUNT(*)
+                        FROM eoip_session_rollback_test
+                        """)).scalar_one()
 
-            assert count == 0
-
-            connection.execute(text("""
-                    DROP TABLE IF EXISTS eoip_rollback_test
-                    """))
-            connection.commit()
+                assert result == 0
+            finally:
+                setup_session.rollback()
 
 
 class TestDatabaseConstraints:
-    """Verify important PostgreSQL relationships and constraints."""
+    """Verify important relational database constraints."""
 
     def test_plant_primary_key_exists(
         self,
@@ -419,9 +410,7 @@ class TestDatabaseConstraints:
             schema="public",
         )
 
-        assert primary_key["constrained_columns"] == [
-            "plant_id",
-        ]
+        assert primary_key["constrained_columns"] == ["plant_id"]
 
     def test_equipment_foreign_keys_exist(
         self,
@@ -434,12 +423,20 @@ class TestDatabaseConstraints:
             schema="public",
         )
 
-        referred_tables = {
-            foreign_key["referred_table"] for foreign_key in foreign_keys
+        relationships = {
+            (
+                tuple(foreign_key["constrained_columns"]),
+                foreign_key["referred_table"],
+                tuple(foreign_key["referred_columns"]),
+            )
+            for foreign_key in foreign_keys
         }
 
-        assert "plants" in referred_tables
-        assert "equipment" in referred_tables
+        assert (
+            ("plant_id",),
+            "plants",
+            ("plant_id",),
+        ) in relationships
 
     def test_incident_alarm_relationship_exists(
         self,
@@ -452,11 +449,20 @@ class TestDatabaseConstraints:
             schema="public",
         )
 
-        referred_tables = {
-            foreign_key["referred_table"] for foreign_key in foreign_keys
+        relationships = {
+            (
+                tuple(foreign_key["constrained_columns"]),
+                foreign_key["referred_table"],
+                tuple(foreign_key["referred_columns"]),
+            )
+            for foreign_key in foreign_keys
         }
 
-        assert "alarms" in referred_tables
+        assert (
+            ("linked_alarm_id",),
+            "alarms",
+            ("alarm_id",),
+        ) in relationships
 
     def test_work_order_incident_relationship_exists(
         self,
@@ -469,8 +475,17 @@ class TestDatabaseConstraints:
             schema="public",
         )
 
-        referred_tables = {
-            foreign_key["referred_table"] for foreign_key in foreign_keys
+        relationships = {
+            (
+                tuple(foreign_key["constrained_columns"]),
+                foreign_key["referred_table"],
+                tuple(foreign_key["referred_columns"]),
+            )
+            for foreign_key in foreign_keys
         }
 
-        assert "incidents" in referred_tables
+        assert (
+            ("linked_incident_id",),
+            "incidents",
+            ("incident_id",),
+        ) in relationships

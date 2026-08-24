@@ -275,9 +275,7 @@ class AlarmORM(Base):
             raise TypeError("alarm must be an Alarm instance.")
 
         if alarm.alarm_id != self.alarm_id:
-            raise ValueError(
-                "Cannot update AlarmORM with a different alarm_id."
-            )
+            raise ValueError("Cannot update AlarmORM with a different alarm_id.")
 
         self.plant_id = alarm.plant_id
         self.equipment_id = alarm.equipment_id
@@ -310,9 +308,7 @@ class AlarmORM(Base):
                 else None
             ),
             "cleared_at": (
-                self.cleared_at.isoformat()
-                if self.cleared_at is not None
-                else None
+                self.cleared_at.isoformat() if self.cleared_at is not None else None
             ),
             "message": self.message,
             "is_synthetic_ground_truth": self.is_synthetic_ground_truth,
@@ -321,14 +317,10 @@ class AlarmORM(Base):
             "acknowledgement_seconds": self.acknowledgement_seconds,
             "resolution_seconds": self.resolution_seconds,
             "created_at": (
-                self.created_at.isoformat()
-                if self.created_at is not None
-                else None
+                self.created_at.isoformat() if self.created_at is not None else None
             ),
             "updated_at": (
-                self.updated_at.isoformat()
-                if self.updated_at is not None
-                else None
+                self.updated_at.isoformat() if self.updated_at is not None else None
             ),
         }
 

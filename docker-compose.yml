@@ -1,0 +1,105 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: eoip-timescaledb
+
+    environment:
+      POSTGRES_DB: eoip
+      POSTGRES_USER: eoip_user
+      POSTGRES_PASSWORD: eoip_password
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - eoip_timescale_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U eoip_user -d eoip",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+    restart: unless-stopped
+
+  migration:
+    image: eoip-api:phase13
+    container_name: eoip-migration
+
+    environment:
+      EOIP_DATABASE_URL: postgresql+psycopg2://eoip_user:eoip_password@timescaledb:5432/eoip
+
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+    command:
+      [
+        "alembic",
+        "upgrade",
+        "head",
+      ]
+
+    restart: "no"
+
+  api:
+    image: eoip-api:phase13
+    container_name: eoip-api
+
+    environment:
+      EOIP_DATABASE_URL: postgresql+psycopg2://eoip_user:eoip_password@timescaledb:5432/eoip
+      EOIP_DATABASE_HOST: timescaledb
+      EOIP_DATABASE_PORT: "5432"
+      EOIP_DATABASE_NAME: eoip
+      EOIP_DATABASE_USER: eoip_user
+      EOIP_DATABASE_PASSWORD: eoip_password
+      EOIP_API_ENVIRONMENT: docker
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --fail http://127.0.0.1:8000/api/v1/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+    restart: unless-stopped
+
+  streamlit:
+    image: eoip-streamlit:phase13
+    container_name: eoip-streamlit
+
+    environment:
+      EOIP_API_BASE_URL: http://api:8000/api/v1
+      EOIP_DATABASE_HOST: timescaledb
+      EOIP_DATABASE_PORT: "5432"
+      EOIP_DATABASE_NAME: eoip
+      EOIP_DATABASE_USER: eoip_user
+      EOIP_DATABASE_PASSWORD: eoip_password
+
+    ports:
+      - "8501:8501"
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+volumes:
+  eoip_timescale_data:

@@ -1,4 +1,5 @@
 """Root conftest.py to ensure src is on the Python path."""
+
 import sys
 from pathlib import Path
 

@@ -77,9 +77,7 @@ class Settings:
         "EOIP_API_TOKEN_SECRET",
         secrets.token_urlsafe(32),
     )
-    api_token_expiry_minutes: int = int(
-        _get_env("EOIP_API_TOKEN_EXPIRY_MINUTES", "30")
-    )
+    api_token_expiry_minutes: int = int(_get_env("EOIP_API_TOKEN_EXPIRY_MINUTES", "30"))
 
 
 settings = Settings()
