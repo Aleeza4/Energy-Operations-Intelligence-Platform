@@ -21,11 +21,11 @@ def test_bootstrap_application_returns_expected_result() -> None:
     result = bootstrap_application()
 
     assert isinstance(result, BootstrapResult)
-    assert result.project_name == "Energy Operations Intelligence Platform"
-    assert result.database_host == "localhost"
-    assert result.database_port == 5432
-    assert result.database_name == "eoip"
-    assert result.log_level == "INFO"
+    assert result.project_name == bootstrap_module.settings.project_name
+    assert result.database_host == bootstrap_module.settings.database_host
+    assert result.database_port == bootstrap_module.settings.database_port
+    assert result.database_name == bootstrap_module.settings.database_name
+    assert result.log_level == bootstrap_module.settings.log_level
     assert len(result.initialized_directories) == 23
 
 
@@ -47,7 +47,7 @@ def test_bootstrap_rejects_invalid_database_port(
     invalid_settings = SimpleNamespace(
         project_name="Energy Operations Intelligence Platform",
         database_host="localhost",
-        database_port=70000,
+        database_port=70_000,
         database_name="eoip",
         database_user="postgres",
         log_level="INFO",

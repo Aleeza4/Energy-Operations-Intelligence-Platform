@@ -302,12 +302,8 @@ def test_weather_observation_accepts_measurement_boundaries(
     maximum: float,
 ) -> None:
     """Every documented minimum and maximum should be accepted."""
-    minimum_observation = _make_weather_observation(
-        **{field_name: minimum}
-    )
-    maximum_observation = _make_weather_observation(
-        **{field_name: maximum}
-    )
+    minimum_observation = _make_weather_observation(**{field_name: minimum})
+    maximum_observation = _make_weather_observation(**{field_name: maximum})
 
     assert getattr(minimum_observation, field_name) == minimum
     assert getattr(maximum_observation, field_name) == maximum
@@ -366,9 +362,7 @@ def test_weather_observation_rejects_out_of_range_measurements(
         ValueError,
         match=expected_message,
     ):
-        _make_weather_observation(
-            **{field_name: invalid_value}
-        )
+        _make_weather_observation(**{field_name: invalid_value})
 
 
 @pytest.mark.parametrize(
@@ -403,6 +397,4 @@ def test_weather_observation_rejects_non_numeric_measurements(
         TypeError,
         match=f"Invalid {field_name} value",
     ):
-        _make_weather_observation(
-            **{field_name: invalid_value}
-        )
+        _make_weather_observation(**{field_name: invalid_value})

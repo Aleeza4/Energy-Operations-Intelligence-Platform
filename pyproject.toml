@@ -25,15 +25,19 @@ keywords = [
 
 dependencies = [
     "fastapi",
+    "httpx",
     "loguru",
     "numpy",
+    "prefect",
     "pandas",
     "plotly",
     "prophet",
     "psycopg2-binary",
     "pydantic",
     "python-dotenv",
+    "python-multipart",
     "scikit-learn",
+    "shap",
     "sqlalchemy",
     "streamlit",
     "uvicorn",
@@ -44,6 +48,7 @@ dependencies = [
 dev = [
     "black",
     "pytest",
+    "PyYAML",
     "ruff",
 ]
 
@@ -113,6 +118,7 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
+    "--import-mode=importlib",
 ]
 
 

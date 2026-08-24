@@ -8,6 +8,7 @@ environment variables and exposes project-wide settings.
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
@@ -68,6 +69,15 @@ class Settings:
         "EOIP_LOG_LEVEL",
         DEFAULT_LOG_LEVEL,
     )
+
+    api_environment: str = _get_env("EOIP_API_ENVIRONMENT", "development")
+    api_prefix: str = _get_env("EOIP_API_PREFIX", "/api/v1")
+    api_version: str = _get_env("EOIP_API_VERSION", "0.1.0")
+    api_token_secret: str = _get_env(
+        "EOIP_API_TOKEN_SECRET",
+        secrets.token_urlsafe(32),
+    )
+    api_token_expiry_minutes: int = int(_get_env("EOIP_API_TOKEN_EXPIRY_MINUTES", "30"))
 
 
 settings = Settings()
