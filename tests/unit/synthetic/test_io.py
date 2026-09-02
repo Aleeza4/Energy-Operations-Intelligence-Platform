@@ -660,6 +660,8 @@ def test_partitioned_inverter_scada_output(tmp_path: Path) -> None:
     assert scada_result.file_count >= 2
     base_dir = staging.staging_path / "timeseries" / "inverter_scada"
     for file_path in sorted(base_dir.rglob("*.parquet")):
+        assert file_path.name.startswith("part-")
+        assert len(file_path.name) <= len("part-00000.parquet")
         relative = file_path.relative_to(base_dir)
         parts = [part for part in relative.parts if "=" in part]
         assert any(part.startswith("year=") for part in parts)

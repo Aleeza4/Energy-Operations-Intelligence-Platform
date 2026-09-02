@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "eoip-api"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["api:8000"]
+
+  - job_name: "eoip-streamlit"
+    metrics_path: "/_stcore/health"
+    static_configs:
+      - targets: ["streamlit:8501"]
+
+  - job_name: "eoip-timescaledb"
+    static_configs:
+      - targets: ["timescaledb:5432"]
+
+rule_files:
+  - /etc/prometheus/alerts/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]

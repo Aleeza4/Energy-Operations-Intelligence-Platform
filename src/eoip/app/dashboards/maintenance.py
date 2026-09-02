@@ -6,77 +6,26 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from eoip.app import data_access
 from eoip.app.components import (
     MetricCard,
-    format_filter_caption,
+    get_filter_selection,
     render_csv_download,
     render_dataframe,
+    render_empty_state,
     render_global_filters,
     render_metric_row,
     render_page_intro,
     render_plotly_chart,
     render_section_header,
-    render_status,
 )
-from eoip.app.data_filters import apply_dataframe_filters
-
-
-@st.cache_data(show_spinner=False)
-def _maintenance_priority_data() -> pd.DataFrame:
-    """Return temporary predictive-maintenance priority data."""
-    return pd.DataFrame(
-        {
-            "Priority Rank": [
-                1,
-                2,
-                3,
-                4,
-                5,
-            ],
-            "Equipment ID": [
-                "INV-005",
-                "TRF-004",
-                "INV-003",
-                "INV-006",
-                "TRF-002",
-            ],
-            "Plant": [
-                "Solar Plant D",
-                "Solar Plant D",
-                "Solar Plant B",
-                "Solar Plant C",
-                "Solar Plant C",
-            ],
-            "Health Score": [
-                42.0,
-                55.0,
-                68.0,
-                72.0,
-                78.0,
-            ],
-            "Failure Probability": [
-                0.78,
-                0.58,
-                0.36,
-                0.31,
-                0.24,
-            ],
-            "Risk Level": [
-                "Critical",
-                "High",
-                "High",
-                "Moderate",
-                "Moderate",
-            ],
-            "Priority Score": [
-                0.86,
-                0.72,
-                0.61,
-                0.53,
-                0.45,
-            ],
-        }
-    )
+from eoip.app.data_filters import (
+    FilterDimensions,
+    PageDataContract,
+    equipment_options_for_plant,
+)
+from eoip.app.navigation import navigate_to
+from eoip.app.theme import EOIP_DANGER, EOIP_DANGER_STRONG, EOIP_PRIMARY, RISK_COLORS
 
 
 @st.cache_data(show_spinner=False)
@@ -159,26 +108,78 @@ def _risk_trend_data() -> pd.DataFrame:
     )
 
 
+def build_maintenance_priority(priority: pd.DataFrame) -> pd.DataFrame:
+    """Order maintenance attention by the existing priority rank."""
+    if priority.empty:
+        return priority.copy()
+    return priority.sort_values(["Priority Rank", "Equipment ID"], kind="stable")
+
+
+def related_maintenance_evidence(
+    item: pd.Series,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Return exact plant-and-equipment operational evidence."""
+    plant = str(item["Plant"])
+    equipment = str(item["Equipment ID"])
+    incidents = data_access.get_incidents()
+    anomalies = data_access.get_anomalies()
+    recommendations = data_access.get_recommendations()
+    return (
+        incidents.loc[
+            incidents["Plant"].eq(plant) & incidents["Equipment"].eq(equipment)
+        ].copy(),
+        anomalies.loc[
+            anomalies["Plant"].eq(plant) & anomalies["Equipment"].eq(equipment)
+        ].copy(),
+        recommendations.loc[
+            recommendations["Plant"].eq(plant)
+            & recommendations["Equipment ID"].eq(equipment)
+        ].copy(),
+    )
+
+
 def render() -> None:
     """Render the EOIP Maintenance Dashboard."""
     render_page_intro(
-        title="Maintenance Dashboard",
-        icon="🛠️",
+        title="Maintenance Priority Workspace",
+        icon="maintenance",
         description=(
             "Predictive failure risk, equipment health, explainability, "
             "and maintenance-priority intelligence."
         ),
     )
-    filters = render_global_filters(show_equipment=True)
-    st.caption(format_filter_caption(filters))
-
-    render_status(
-        "Predictive-maintenance intelligence is operational.",
-        level="success",
+    raw_priority = data_access.get_maintenance_priorities()
+    current_scope = get_filter_selection()
+    filters = render_global_filters(
+        show_date=False,
+        show_equipment=True,
+        equipment_options=equipment_options_for_plant(
+            raw_priority, current_scope.plant
+        ),
     )
+    contract = PageDataContract(
+        filters,
+        {
+            "priority": raw_priority,
+            "risk_trend": _risk_trend_data(),
+            "shap": _shap_importance_data(),
+        },
+    )
+    priority = contract.scoped("priority", dimensions=FilterDimensions(date=False))
+    if priority.empty:
+        render_empty_state(
+            title="No maintenance data",
+            message="No maintenance records match the selected asset scope.",
+        )
+        return
+
+    priority = build_maintenance_priority(priority)
+    high_risk = int(priority["Risk Level"].isin(("High", "Critical")).sum())
+    critical = int(priority["Risk Level"].eq("Critical").sum())
+    average_health = float(priority["Health Score"].mean())
 
     render_section_header(
-        "Maintenance Overview",
+        "Maintenance Attention Summary",
         description=("Current equipment health and future-failure risk indicators."),
     )
 
@@ -186,28 +187,22 @@ def render() -> None:
         (
             MetricCard(
                 label="Assets Monitored",
-                value="97",
-                delta="+4",
+                value=len(priority),
             ),
             MetricCard(
                 label="High-Risk Assets",
-                value="12",
-                delta="+3",
+                value=high_risk,
             ),
             MetricCard(
                 label="Critical Assets",
-                value="3",
-                delta="+1",
+                value=critical,
             ),
             MetricCard(
                 label="Avg Health Score",
-                value="84.2",
-                delta="-1.4",
+                value=f"{average_health:.1f}",
             ),
         )
     )
-
-    st.write("")
 
     left_column, right_column = st.columns((3, 2))
 
@@ -218,8 +213,6 @@ def render() -> None:
                 "Assets ranked by failure risk, health, and operational urgency."
             ),
         )
-
-        priority = apply_dataframe_filters(_maintenance_priority_data(), filters)
 
         render_dataframe(
             priority,
@@ -251,13 +244,20 @@ def render() -> None:
             description=("Portfolio distribution of maintenance risk levels."),
         )
 
-        health_distribution = _health_distribution_data()
+        health_distribution = (
+            priority["Risk Level"]
+            .value_counts()
+            .rename_axis("Risk Level")
+            .reset_index(name="Assets")
+        )
 
-        risk_figure = px.pie(
+        risk_figure = px.bar(
             health_distribution,
-            names="Risk Level",
-            values="Assets",
-            hole=0.55,
+            x="Assets",
+            y="Risk Level",
+            orientation="h",
+            color="Risk Level",
+            color_discrete_map=RISK_COLORS,
         )
 
         risk_figure.update_layout(
@@ -283,7 +283,10 @@ def render() -> None:
             description=("Change in high-risk and critical equipment over time."),
         )
 
-        risk_trend = apply_dataframe_filters(_risk_trend_data(), filters)
+        risk_trend = contract.scoped(
+            "risk_trend",
+            dimensions=FilterDimensions(plant=False, equipment=False, date=False),
+        )
 
         risk_long = risk_trend.melt(
             id_vars="Date",
@@ -300,6 +303,10 @@ def render() -> None:
             x="Date",
             y="Asset Count",
             color="Risk Category",
+            color_discrete_map={
+                "High Risk Assets": EOIP_DANGER,
+                "Critical Assets": EOIP_DANGER_STRONG,
+            },
             markers=True,
         )
 
@@ -313,19 +320,26 @@ def render() -> None:
             legend_title_text="",
         )
 
-        render_plotly_chart(
-            trend_figure,
-            data=risk_long,
-            time_series=True,
-        )
+        if filters.plant == "All Plants" and filters.equipment_id is None:
+            render_plotly_chart(trend_figure, data=risk_long, time_series=True)
+        else:
+            render_empty_state(
+                title="Portfolio-only predictive risk trend",
+                message="Choose All Plants and All Equipment to view this source.",
+            )
 
     with right_column:
         render_section_header(
-            "Model Explainability",
-            description=("Most influential predictive-maintenance features."),
+            "Model Diagnostics",
+            description=(
+                "Portfolio model features; this diagnostic is not asset-scoped."
+            ),
         )
 
-        shap_importance = _shap_importance_data().sort_values(
+        shap_importance = contract.scoped(
+            "shap",
+            dimensions=FilterDimensions(plant=False, equipment=False, date=False),
+        ).sort_values(
             "Mean Absolute SHAP",
             ascending=True,
         )
@@ -335,6 +349,7 @@ def render() -> None:
             x="Mean Absolute SHAP",
             y="Feature",
             orientation="h",
+            color_discrete_sequence=[EOIP_PRIMARY],
         )
 
         shap_figure.update_layout(
@@ -377,6 +392,45 @@ def render() -> None:
             ]
         ],
     )
+    selected_equipment = st.selectbox(
+        "Equipment to review",
+        options=priority["Equipment ID"].tolist(),
+        key="maintenance_selected_equipment",
+    )
+    selected = priority.loc[priority["Equipment ID"].eq(selected_equipment)].iloc[0]
+    incidents, anomalies, recommendations = related_maintenance_evidence(selected)
+    render_section_header(
+        "Related Operational Evidence",
+        description="Exact plant-and-equipment matches; no causal lineage is implied.",
+    )
+    render_metric_row(
+        (
+            MetricCard(label="Related Incidents", value=len(incidents)),
+            MetricCard(label="Related Anomalies", value=len(anomalies)),
+            MetricCard(label="Relevant Recommendations", value=len(recommendations)),
+        )
+    )
+    render_section_header(
+        "Engineering Actions",
+        description="Continue investigation with supported equipment context.",
+    )
+    with st.container(horizontal=True):
+        if st.button("Inspect asset", key="maintenance_open_asset"):
+            navigate_to(
+                "assets",
+                plant=str(selected["Plant"]),
+                equipment_id=str(selected["Equipment ID"]),
+            )
+        if st.button("Review anomalies", key="maintenance_open_anomaly"):
+            navigate_to(
+                "anomaly",
+                plant=str(selected["Plant"]),
+                equipment_id=str(selected["Equipment ID"]),
+            )
+        if st.button("Review operations", key="maintenance_open_operations"):
+            navigate_to("operations", plant=str(selected["Plant"]))
+        if st.button("Review plant performance", key="maintenance_open_plant"):
+            navigate_to("plant_performance", plant=str(selected["Plant"]))
     render_csv_download(
         priority,
         label="Download maintenance priority CSV",

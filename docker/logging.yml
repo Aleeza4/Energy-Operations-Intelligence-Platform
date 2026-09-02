@@ -1,0 +1,46 @@
+version: "3.9"
+
+x-logging-base: &logging-base
+  driver: loki
+  options:
+    loki-url: "http://loki:3100/loki/api/v1/push"
+    loki-retries: "5"
+    loki-batch-size: "400"
+    mode: non-blocking
+    max-buffer-size: "4m"
+    loki-external-labels: "service={{.Name}},environment=docker,project=eoip"
+
+services:
+  timescaledb:
+    logging:
+      <<: *logging-base
+      options:
+        loki-url: "http://loki:3100/loki/api/v1/push"
+        loki-external-labels: "service={{.Name}},environment=docker,project=eoip,component=database"
+
+  migration:
+    logging:
+      <<: *logging-base
+      options:
+        loki-url: "http://loki:3100/loki/api/v1/push"
+        loki-external-labels: "service={{.Name}},environment=docker,project=eoip,component=migration"
+
+  api:
+    logging:
+      <<: *logging-base
+      options:
+        loki-url: "http://loki:3100/loki/api/v1/push"
+        loki-external-labels: "service={{.Name}},environment=docker,project=eoip,component=api"
+
+  streamlit:
+    logging:
+      <<: *logging-base
+      options:
+        loki-url: "http://loki:3100/loki/api/v1/push"
+        loki-external-labels: "service={{.Name}},environment=docker,project=eoip,component=streamlit"
+
+# Centralized logging architecture:
+# - All containers push structured logs to Loki via a common Docker logging driver.
+# - A separate Grafana/Loki stack can be deployed to query and visualize application logs.
+# - The standard log labels include service name, environment, project, and subsystem.
+# - This configuration keeps deployment logs centralized without changing application code.

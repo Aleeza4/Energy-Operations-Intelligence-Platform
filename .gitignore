@@ -34,6 +34,7 @@ env/
 # Testing
 # -----------------------------------------------------
 .pytest_cache/
+.pytest_tmp_*/
 .coverage
 htmlcov/
 
@@ -41,6 +42,9 @@ htmlcov/
 # Ruff
 # -----------------------------------------------------
 .ruff_cache/
+
+# Local orchestration state created by Prefect validation runs
+.prefect_*/
 
 # -----------------------------------------------------
 # mypy
@@ -81,3 +85,6 @@ desktop.ini
 *.swp
 # Obsidian
 .obsidian/
+.pytest-tmp-*
+
+.pytest-tmp-*

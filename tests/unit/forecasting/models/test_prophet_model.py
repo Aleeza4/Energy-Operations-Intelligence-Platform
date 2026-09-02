@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from eoip.forecasting.models.prophet_model import ProphetForecastModel
+from eoip.forecasting.models.seasonal_naive import SeasonalNaiveForecastModel
 
 
 def _training_frame() -> pd.DataFrame:
@@ -269,6 +271,65 @@ class TestProphetForecastModelPredict:
         )
 
         assert pd.api.types.is_numeric_dtype(result.predictions["prediction"])
+        assert pd.api.types.is_numeric_dtype(result.predictions["lower_bound"])
+        assert pd.api.types.is_numeric_dtype(result.predictions["upper_bound"])
+        assert (
+            result.predictions["lower_bound"] <= result.predictions["upper_bound"]
+        ).all()
+
+    def test_outperforms_seasonal_naive_on_periodic_solar_signal(self) -> None:
+        n = 576
+        timestamps = pd.date_range("2026-01-01", periods=n, freq="15min", tz="UTC")
+        signal = 350 + 180 * np.sin(2 * np.pi * np.arange(n) / 96)
+        frame = pd.DataFrame(
+            {
+                "timestamp": timestamps,
+                "active_power_kw": signal,
+            }
+        )
+
+        train = frame.iloc[:384].copy()
+        test = frame.iloc[384:].copy()
+
+        prophet_model = ProphetForecastModel(
+            weekly_seasonality=False,
+            yearly_seasonality=False,
+        )
+        prophet_model.fit(
+            frame=train,
+            timestamp_column="timestamp",
+            target_column="active_power_kw",
+        )
+        prophet_forecast = prophet_model.predict(
+            horizon=len(test),
+            frequency="15min",
+        )
+
+        seasonal_model = SeasonalNaiveForecastModel(seasonal_periods=96)
+        seasonal_model.fit(
+            frame=train,
+            timestamp_column="timestamp",
+            target_column="active_power_kw",
+        )
+        seasonal_forecast = seasonal_model.predict(
+            horizon=len(test),
+            frequency="15min",
+        )
+
+        prophet_error = np.mean(
+            np.abs(
+                test["active_power_kw"].to_numpy()
+                - prophet_forecast.predictions["prediction"].to_numpy()
+            )
+        )
+        seasonal_error = np.mean(
+            np.abs(
+                test["active_power_kw"].to_numpy()
+                - seasonal_forecast.predictions["prediction"].to_numpy()
+            )
+        )
+
+        assert prophet_error < seasonal_error
 
     def test_predict_requires_fitted_model(self) -> None:
         model = ProphetForecastModel()

@@ -1,5 +1,9 @@
 # EOIP Anomaly Detection Models
 
+> **Design/implementation reference.** Use the
+> [anomaly model card](ANOMALY_MODEL_CARD.md) for empirical status. Phase L
+> anomaly effectiveness metrics are mostly `NOT VERIFIED`.
+
 ## Overview
 
 The Energy Operations Intelligence Platform anomaly detection layer identifies

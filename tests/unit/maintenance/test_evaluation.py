@@ -9,6 +9,8 @@ import pytest
 
 from eoip.maintenance.evaluation import (
     MaintenanceEvaluationResult,
+    calculate_calibration_bins,
+    calculate_top_risk_recall,
     evaluate_failure_predictions,
 )
 
@@ -56,6 +58,45 @@ def _probabilities() -> pd.Series:
         ],
         name="failure_probability",
     )
+
+
+def test_evaluation_adds_pr_auc_top_risk_and_calibration() -> None:
+    result = evaluate_failure_predictions(
+        actual=_actual(), predicted=_predicted(), probabilities=_probabilities()
+    )
+    assert 0.0 <= result.pr_auc <= 1.0
+    assert result.roc_auc == pytest.approx(8 / 9)
+    assert result.top_five_percent_count == 1
+    assert result.top_five_percent_recall == pytest.approx(1 / 3)
+    assert 0.0 <= result.brier_score <= 1.0
+    assert result.calibration_bins
+
+
+def test_top_risk_recall_rounds_up_and_keeps_ties_stable() -> None:
+    actual = pd.Series([1, 0, 1, 0, 0, 0])
+    tied = pd.Series([0.9, 0.9, 0.8, 0.7, 0.6, 0.5])
+    recall, count = calculate_top_risk_recall(
+        actual=actual, probabilities=tied, fraction=0.05
+    )
+    assert count == 1
+    assert recall == pytest.approx(0.5)
+
+
+def test_top_risk_recall_without_positives_is_undefined() -> None:
+    recall, count = calculate_top_risk_recall(
+        actual=pd.Series([0, 0]), probabilities=pd.Series([0.2, 0.1])
+    )
+    assert recall is None
+    assert count == 1
+
+
+def test_calibration_bins_report_observed_and_predicted_rates() -> None:
+    bins = calculate_calibration_bins(
+        actual=pd.Series([0, 1, 1, 0]),
+        probabilities=pd.Series([0.1, 0.8, 0.9, 0.2]),
+        bin_count=2,
+    )
+    assert sum(int(item["count"]) for item in bins) == 4
 
 
 class TestMaintenanceEvaluationResult:

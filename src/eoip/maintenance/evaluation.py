@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
+    brier_score_loss,
     confusion_matrix,
     f1_score,
     precision_score,
@@ -31,6 +33,11 @@ class MaintenanceEvaluationResult:
     false_positives: int
     false_negatives: int
     sample_count: int
+    pr_auc: float | None = None
+    top_five_percent_recall: float | None = None
+    top_five_percent_count: int = 0
+    brier_score: float | None = None
+    calibration_bins: tuple[dict[str, float | int], ...] = ()
 
     def __post_init__(self) -> None:
         """Validate evaluation result."""
@@ -71,6 +78,17 @@ class MaintenanceEvaluationResult:
 
         if confusion_total != self.sample_count:
             raise ValueError("Confusion-matrix counts must equal sample_count.")
+
+        if self.pr_auc is not None and not 0.0 <= self.pr_auc <= 1.0:
+            raise ValueError("pr_auc must be between 0 and 1.")
+
+        if self.top_five_percent_recall is not None and not (
+            0.0 <= self.top_five_percent_recall <= 1.0
+        ):
+            raise ValueError("top_five_percent_recall must be between 0 and 1.")
+
+        if self.brier_score is not None and not 0.0 <= self.brier_score <= 1.0:
+            raise ValueError("brier_score must be between 0 and 1.")
 
 
 def evaluate_failure_predictions(
@@ -131,6 +149,16 @@ def evaluate_failure_predictions(
     if ((probability_values < 0.0) | (probability_values > 1.0)).any():
         raise ValueError("Failure probabilities must be between 0 and 1.")
 
+    top_recall, top_count = calculate_top_risk_recall(
+        actual=actual_binary,
+        probabilities=probabilities,
+        fraction=0.05,
+    )
+    calibration_bins = calculate_calibration_bins(
+        actual=actual_binary,
+        probabilities=probabilities,
+    )
+
     tn, fp, fn, tp = confusion_matrix(
         actual_binary,
         predicted_binary,
@@ -186,4 +214,66 @@ def evaluate_failure_predictions(
         false_positives=int(fp),
         false_negatives=int(fn),
         sample_count=len(actual_binary),
+        pr_auc=float(average_precision_score(actual_binary, probability_values)),
+        top_five_percent_recall=top_recall,
+        top_five_percent_count=top_count,
+        brier_score=float(brier_score_loss(actual_binary, probability_values)),
+        calibration_bins=calibration_bins,
     )
+
+
+def calculate_top_risk_recall(
+    *, actual: pd.Series, probabilities: pd.Series, fraction: float = 0.05
+) -> tuple[float | None, int]:
+    """Return positive recall captured by the highest-risk fraction.
+
+    The cohort size is ``ceil(n * fraction)`` with a minimum of one. Risk ties
+    retain stable input order, so ties do not silently expand the cohort.
+    """
+    if len(actual) != len(probabilities) or actual.empty:
+        raise ValueError(
+            "Actual labels and probabilities require equal non-zero length."
+        )
+    if not 0.0 < fraction <= 1.0:
+        raise ValueError("fraction must be greater than zero and at most one.")
+    positive_count = int(actual.astype(int).sum())
+    cohort_count = max(1, int(np.ceil(len(actual) * fraction)))
+    if positive_count == 0:
+        return None, cohort_count
+    ranked = pd.DataFrame(
+        {"actual": actual.astype(int).to_numpy(), "risk": probabilities.to_numpy()}
+    ).sort_values("risk", ascending=False, kind="stable")
+    captured = int(ranked.head(cohort_count)["actual"].sum())
+    return captured / positive_count, cohort_count
+
+
+def calculate_calibration_bins(
+    *, actual: pd.Series, probabilities: pd.Series, bin_count: int = 10
+) -> tuple[dict[str, float | int], ...]:
+    """Return observed and predicted event rates for fixed-width bins."""
+    if len(actual) != len(probabilities) or actual.empty:
+        raise ValueError("Calibration inputs require equal non-zero length.")
+    if bin_count < 2:
+        raise ValueError("bin_count must be at least two.")
+    frame = pd.DataFrame(
+        {
+            "actual": actual.astype(int).to_numpy(),
+            "probability": probabilities.to_numpy(dtype=float),
+        }
+    )
+    edges = np.linspace(0.0, 1.0, bin_count + 1)
+    frame["bin"] = pd.cut(
+        frame["probability"], bins=edges, include_lowest=True, right=True
+    )
+    records: list[dict[str, float | int]] = []
+    for interval, group in frame.groupby("bin", observed=True):
+        records.append(
+            {
+                "lower": float(interval.left),
+                "upper": float(interval.right),
+                "count": len(group),
+                "mean_predicted_probability": float(group["probability"].mean()),
+                "observed_event_rate": float(group["actual"].mean()),
+            }
+        )
+    return tuple(records)

@@ -8,6 +8,7 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import f1_score, precision_score, recall_score
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +150,18 @@ class RandomForestFailurePredictor:
         return self._is_fitted
 
     @property
+    def probability_threshold(self) -> float:
+        """Return the current probability threshold used for classification."""
+        return float(self._probability_threshold)
+
+    @probability_threshold.setter
+    def probability_threshold(self, value: float) -> None:
+        """Set the probability threshold used for classification."""
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("probability_threshold must be between 0 and 1.")
+        self._probability_threshold = float(value)
+
+    @property
     def estimator(self) -> RandomForestClassifier:
         """Return the underlying fitted Random Forest estimator."""
         if not self._is_fitted:
@@ -195,6 +208,95 @@ class RandomForestFailurePredictor:
         )
 
         self._is_fitted = True
+
+    def optimize_probability_threshold(
+        self,
+        features: pd.DataFrame,
+        target: pd.Series,
+        *,
+        min_threshold: float = 0.10,
+        max_threshold: float = 0.95,
+        step: float = 0.01,
+    ) -> float:
+        """Tune a decision threshold to balance precision and recall.
+
+        The model examines a candidate grid of thresholds, scores them by F1,
+        and uses recall as a tie-breaker so the selected threshold remains useful
+        for operation-critical maintenance prioritization.
+        """
+        if not self._is_fitted:
+            raise RuntimeError("Failure predictor must be fitted before optimization.")
+
+        self._validate_features(features)
+
+        if target.empty:
+            raise ValueError("Failure target must not be empty.")
+
+        if len(features) != len(target):
+            raise ValueError(
+                "Features and target must contain the same number of rows."
+            )
+
+        if target.isna().any():
+            raise ValueError("Failure target must not contain missing values.")
+
+        normalized_target = target.astype(int)
+        unique_classes = set(normalized_target.unique().tolist())
+
+        if not unique_classes.issubset({0, 1}):
+            raise ValueError("Failure target must contain only binary values.")
+
+        if len(unique_classes) < 2:
+            raise ValueError("Failure target must contain both classes.")
+
+        if not 0.0 <= min_threshold <= max_threshold <= 1.0:
+            raise ValueError(
+                "Threshold bounds must lie between 0 and 1 with min_threshold <= max_threshold."
+            )
+
+        if step <= 0.0:
+            raise ValueError("step must be greater than zero.")
+
+        probabilities = self._model.predict_proba(features)[:, 1]
+
+        best_threshold = self._probability_threshold
+        best_score = float("-inf")
+        best_recall = -1.0
+        best_precision = -1.0
+
+        thresholds = np.arange(min_threshold, max_threshold + step / 2, step)
+        thresholds = np.clip(thresholds, 0.0, 1.0)
+
+        for threshold in thresholds:
+            predicted = probabilities >= threshold
+            precision = precision_score(
+                normalized_target,
+                predicted,
+                zero_division=0,
+            )
+            recall = recall_score(
+                normalized_target,
+                predicted,
+                zero_division=0,
+            )
+            score = f1_score(
+                normalized_target,
+                predicted,
+                zero_division=0,
+            )
+
+            if score > best_score or (
+                np.isclose(score, best_score)
+                and recall > best_recall
+                and precision >= best_precision
+            ):
+                best_threshold = float(threshold)
+                best_score = float(score)
+                best_recall = float(recall)
+                best_precision = float(precision)
+
+        self._probability_threshold = float(best_threshold)
+        return float(best_threshold)
 
     def predict(
         self,

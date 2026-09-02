@@ -1,363 +1,251 @@
-"""Data quality dashboard for the EOIP Streamlit application."""
+"""Data trust and quality governance workspace for EOIP."""
 
 from __future__ import annotations
+
+from collections.abc import Mapping
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from eoip.app import data_access
 from eoip.app.components import (
     MetricCard,
-    format_filter_caption,
+    PageContext,
     render_csv_download,
     render_dataframe,
-    render_global_filters,
+    render_empty_state,
     render_metric_row,
+    render_page_context,
     render_page_intro,
     render_plotly_chart,
     render_section_header,
-    render_status,
 )
-from eoip.app.data_filters import apply_dataframe_filters
+from eoip.app.theme import EOIP_PRIMARY
 
 
-@st.cache_data(show_spinner=False)
-def _quality_summary_data() -> pd.DataFrame:
-    """Return temporary data-quality summary."""
+def _governed_datasets() -> dict[str, pd.DataFrame]:
+    """Return the application datasets available to this governance view."""
+    return {
+        "Plants": data_access.get_plant_performance(),
+        "Equipment": data_access.get_assets(),
+        "Incidents": data_access.get_incidents(),
+        "Forecasts": data_access.get_forecasts(),
+        "Anomalies": data_access.get_anomalies(),
+        "Recommendations": data_access.get_recommendations(),
+        "Maintenance": data_access.get_maintenance_priorities(),
+    }
+
+
+def calculate_completeness(dataframe: pd.DataFrame) -> float | None:
+    """Return non-null cells as a percentage of all cells."""
+    total_cells = int(dataframe.shape[0] * dataframe.shape[1])
+    if total_cells == 0:
+        return None
+    non_null_cells = int(dataframe.notna().to_numpy().sum())
+    return non_null_cells / total_cells * 100
+
+
+def build_dataset_coverage(
+    datasets: Mapping[str, pd.DataFrame],
+) -> pd.DataFrame:
+    """Summarize volume and directly measurable snapshot quality."""
+    rows = []
+    for name, dataframe in datasets.items():
+        completeness = calculate_completeness(dataframe)
+        rows.append(
+            {
+                "Dataset": name,
+                "Records": len(dataframe),
+                "Columns": len(dataframe.columns),
+                "Missing Cells": int(dataframe.isna().to_numpy().sum()),
+                "Duplicate Records": int(dataframe.duplicated().sum()),
+                "Completeness (%)": completeness,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def build_integrity_exceptions(
+    *,
+    equipment: pd.DataFrame,
+    related_datasets: Mapping[str, pd.DataFrame],
+) -> pd.DataFrame:
+    """Find records whose plant/equipment identity is absent from asset master."""
+    columns = ("Dataset", "Issue", "Plant", "Equipment", "Severity")
+    if equipment.empty:
+        return pd.DataFrame(columns=columns)
+    known = set(zip(equipment["Plant"], equipment["Equipment ID"], strict=True))
+    exceptions: list[dict[str, object]] = []
+    for dataset_name, dataframe in related_datasets.items():
+        equipment_column = next(
+            (name for name in ("Equipment ID", "Equipment") if name in dataframe),
+            None,
+        )
+        if equipment_column is None or "Plant" not in dataframe:
+            continue
+        for _, row in dataframe.iterrows():
+            identity = (row["Plant"], row[equipment_column])
+            if identity not in known:
+                exceptions.append(
+                    {
+                        "Dataset": dataset_name,
+                        "Issue": "Unknown plant/equipment relationship",
+                        "Plant": row["Plant"],
+                        "Equipment": row[equipment_column],
+                        "Severity": "High",
+                    }
+                )
+    return pd.DataFrame(exceptions, columns=columns)
+
+
+def build_quality_exceptions(
+    coverage: pd.DataFrame, integrity: pd.DataFrame
+) -> pd.DataFrame:
+    """Combine supported snapshot exceptions without a composite score."""
+    rows: list[dict[str, object]] = []
+    for _, row in coverage.iterrows():
+        if row["Missing Cells"]:
+            rows.append(
+                {
+                    "Dataset": row["Dataset"],
+                    "Issue": "Missing values",
+                    "Affected Records": int(row["Missing Cells"]),
+                    "Severity": "Medium",
+                }
+            )
+        if row["Duplicate Records"]:
+            rows.append(
+                {
+                    "Dataset": row["Dataset"],
+                    "Issue": "Duplicate records",
+                    "Affected Records": int(row["Duplicate Records"]),
+                    "Severity": "Medium",
+                }
+            )
+    if not integrity.empty:
+        for dataset, count in integrity.groupby("Dataset").size().items():
+            rows.append(
+                {
+                    "Dataset": dataset,
+                    "Issue": "Unknown plant/equipment relationship",
+                    "Affected Records": int(count),
+                    "Severity": "High",
+                }
+            )
     return pd.DataFrame(
-        {
-            "Dataset": [
-                "SCADA",
-                "Weather",
-                "Alarms",
-                "Incidents",
-                "Forecasts",
-                "Maintenance",
-            ],
-            "Completeness (%)": [
-                99.4,
-                98.8,
-                99.7,
-                100.0,
-                99.1,
-                98.6,
-            ],
-            "Validity (%)": [
-                99.8,
-                99.2,
-                99.5,
-                100.0,
-                98.9,
-                99.0,
-            ],
-            "Freshness (%)": [
-                99.9,
-                99.4,
-                99.8,
-                100.0,
-                98.7,
-                98.9,
-            ],
-            "Failed Checks": [
-                3,
-                5,
-                2,
-                0,
-                4,
-                6,
-            ],
-        }
-    )
-
-
-@st.cache_data(show_spinner=False)
-def _quality_trend_data() -> pd.DataFrame:
-    """Return temporary data-quality trend."""
-    return pd.DataFrame(
-        {
-            "Date": pd.date_range(
-                start="2026-08-14",
-                periods=8,
-                freq="D",
-            ),
-            "Quality Score (%)": [
-                97.8,
-                98.1,
-                98.5,
-                98.2,
-                98.9,
-                99.0,
-                98.7,
-                99.1,
-            ],
-        }
-    )
-
-
-@st.cache_data(show_spinner=False)
-def _failed_checks_data() -> pd.DataFrame:
-    """Return temporary failed data-quality checks."""
-    return pd.DataFrame(
-        {
-            "Check": [
-                "SCADA timestamp continuity",
-                "Weather null-value check",
-                "Maintenance feature completeness",
-                "Forecast timestamp alignment",
-                "Equipment identifier integrity",
-            ],
-            "Dataset": [
-                "SCADA",
-                "Weather",
-                "Maintenance",
-                "Forecasts",
-                "SCADA",
-            ],
-            "Severity": [
-                "Medium",
-                "Low",
-                "High",
-                "Medium",
-                "High",
-            ],
-            "Affected Rows": [
-                24,
-                12,
-                41,
-                18,
-                9,
-            ],
-            "Status": [
-                "Investigating",
-                "Open",
-                "Open",
-                "Monitoring",
-                "Investigating",
-            ],
-        }
-    )
-
-
-@st.cache_data(show_spinner=False)
-def _pipeline_health_data() -> pd.DataFrame:
-    """Return temporary ETL pipeline-health data."""
-    return pd.DataFrame(
-        {
-            "Pipeline": [
-                "SCADA Ingestion",
-                "Weather Ingestion",
-                "Operations Transform",
-                "Analytics Refresh",
-                "Forecast Refresh",
-            ],
-            "Status": [
-                "Healthy",
-                "Healthy",
-                "Healthy",
-                "Healthy",
-                "Watch",
-            ],
-            "Last Run": [
-                "09:25",
-                "09:20",
-                "09:18",
-                "09:15",
-                "08:45",
-            ],
-            "Duration (sec)": [
-                42,
-                18,
-                31,
-                27,
-                64,
-            ],
-        }
+        rows,
+        columns=("Dataset", "Issue", "Affected Records", "Severity"),
     )
 
 
 def render() -> None:
-    """Render the EOIP Data Quality Dashboard."""
+    """Render the EOIP Data Trust and Quality workspace."""
     render_page_intro(
-        title="Data Quality",
-        icon="✅",
-        description=(
-            "Completeness, validity, freshness, pipeline health, "
-            "and data-validation intelligence."
-        ),
+        title="Data Trust & Quality",
+        icon="data_quality",
+        description="Snapshot completeness, coverage, and operational integrity.",
     )
-    filters = render_global_filters()
-    st.caption(format_filter_caption(filters, show_equipment=False))
-
-    render_status(
-        "Data-quality monitoring is operational.",
-        level="success",
+    render_page_context(PageContext(scope="Platform"))
+    datasets = _governed_datasets()
+    coverage = build_dataset_coverage(datasets)
+    integrity = build_integrity_exceptions(
+        equipment=datasets["Equipment"],
+        related_datasets={
+            name: frame
+            for name, frame in datasets.items()
+            if name not in {"Plants", "Equipment", "Forecasts"}
+        },
     )
+    exceptions = build_quality_exceptions(coverage, integrity)
+    records = int(coverage["Records"].sum())
+    cells = int((coverage["Records"] * coverage["Columns"]).sum())
+    missing = int(coverage["Missing Cells"].sum())
+    completeness = None if cells == 0 else (cells - missing) / cells * 100
 
     render_section_header(
-        "Quality Overview",
-        description=(
-            "Current platform-wide data quality and pipeline-health indicators."
-        ),
+        "Trust Summary",
+        description="Directly measured snapshot quantities; no overall quality score.",
     )
-
     render_metric_row(
         (
-            MetricCard(
-                label="Overall Quality Score",
-                value="99.1%",
-                delta="+0.4%",
-            ),
+            MetricCard(label="Records Evaluated", value=records),
             MetricCard(
                 label="Completeness",
-                value="99.3%",
-                delta="+0.2%",
+                value=None if completeness is None else f"{completeness:.1f}%",
             ),
-            MetricCard(
-                label="Failed Checks",
-                value="20",
-                delta="-5",
-            ),
-            MetricCard(
-                label="Healthy Pipelines",
-                value="4 / 5",
-                delta="80%",
-            ),
+            MetricCard(label="Missing Cells", value=missing),
+            MetricCard(label="Validation Exceptions", value=len(exceptions)),
+            MetricCard(label="Integrity Issues", value=len(integrity)),
         )
     )
 
-    st.write("")
-
-    quality_summary = _quality_summary_data()
+    render_section_header(
+        "Quality Exceptions",
+        description="Measured snapshot issues requiring governance attention.",
+    )
+    if exceptions.empty:
+        render_empty_state(
+            title="No measured quality exceptions",
+            message="No missing, duplicate, or tested integrity issues were detected.",
+        )
+    else:
+        severity_order = {"High": 0, "Medium": 1, "Low": 2}
+        exceptions = (
+            exceptions.assign(
+                _order=exceptions["Severity"].map(severity_order).fillna(3)
+            )
+            .sort_values(["_order", "Affected Records"], ascending=[True, False])
+            .drop(columns="_order")
+        )
+        render_dataframe(exceptions)
 
     render_section_header(
-        "Dataset Quality",
-        description=(
-            "Completeness, validity, freshness, and failed checks by dataset."
-        ),
+        "Dataset Coverage",
+        description="Available records and measurable completeness by dataset.",
     )
-
+    coverage_figure = px.bar(
+        coverage.sort_values("Records"),
+        x="Records",
+        y="Dataset",
+        orientation="h",
+        color_discrete_sequence=[EOIP_PRIMARY],
+    )
+    coverage_figure.update_layout(xaxis_title="Records", yaxis_title="")
+    render_plotly_chart(coverage_figure, data=coverage)
     render_dataframe(
-        quality_summary,
+        coverage,
         column_config={
-            "Completeness (%)": st.column_config.ProgressColumn(
-                "Completeness (%)",
-                min_value=0.0,
-                max_value=100.0,
-                format="%.1f%%",
-            ),
-            "Validity (%)": st.column_config.ProgressColumn(
-                "Validity (%)",
-                min_value=0.0,
-                max_value=100.0,
-                format="%.1f%%",
-            ),
-            "Freshness (%)": st.column_config.ProgressColumn(
-                "Freshness (%)",
-                min_value=0.0,
-                max_value=100.0,
-                format="%.1f%%",
-            ),
+            "Completeness (%)": st.column_config.NumberColumn(format="%.1f%%")
         },
     )
 
-    left_column, right_column = st.columns((3, 2))
-
-    with left_column:
-        render_section_header(
-            "Quality Trend",
-            description=("Platform-wide data-quality score over time."),
-        )
-
-        quality_trend = apply_dataframe_filters(_quality_trend_data(), filters)
-
-        trend_figure = px.line(
-            quality_trend,
-            x="Date",
-            y="Quality Score (%)",
-            markers=True,
-        )
-
-        trend_figure.update_layout(
-            margin=dict(
-                l=20,
-                r=20,
-                t=20,
-                b=20,
-            ),
-            yaxis_range=[
-                90,
-                100,
-            ],
-        )
-
-        render_plotly_chart(
-            trend_figure,
-            data=quality_trend,
-            time_series=True,
-        )
-
-    with right_column:
-        render_section_header(
-            "Failed Checks by Dataset",
-            description=("Current validation failures requiring attention."),
-        )
-
-        failures = quality_summary[
-            [
-                "Dataset",
-                "Failed Checks",
-            ]
-        ].sort_values(
-            "Failed Checks",
-            ascending=True,
-        )
-
-        failure_figure = px.bar(
-            failures,
-            x="Failed Checks",
-            y="Dataset",
-            orientation="h",
-        )
-
-        failure_figure.update_layout(
-            margin=dict(
-                l=20,
-                r=20,
-                t=20,
-                b=20,
-            )
-        )
-
-        render_plotly_chart(
-            failure_figure,
-            data=failures,
-        )
-
     render_section_header(
-        "Failed Validation Checks",
-        description=("Current data-quality exceptions requiring investigation."),
+        "Integrity & Validation",
+        description="Exact plant/equipment relationships tested against asset master.",
     )
+    if integrity.empty:
+        render_empty_state(
+            title="No tested integrity exceptions",
+            message="All tested plant/equipment identities exist in asset master.",
+        )
+    else:
+        render_dataframe(integrity)
 
-    failed_checks = _failed_checks_data()
-    render_dataframe(failed_checks)
-    render_csv_download(
-        quality_summary,
-        label="Download quality summary CSV",
-        report_name="data-quality-summary",
-        filters=filters,
-        key="quality_summary_download",
-    )
-    render_csv_download(
-        failed_checks,
-        label="Download validation failures CSV",
-        report_name="validation-failures",
-        filters=filters,
-        key="quality_failures_download",
-    )
-
-    render_section_header(
-        "ETL Pipeline Health",
-        description=("Latest execution status for major data pipelines."),
-    )
-
-    render_dataframe(_pipeline_health_data())
+    with st.expander("Data governance notes and exports"):
+        st.caption(
+            "Freshness, update frequency, and quality history are not available in "
+            "the application data contract and are intentionally omitted."
+        )
+        render_csv_download(
+            exceptions,
+            label="Export quality exceptions CSV",
+            report_name="quality-exceptions",
+            key="quality_exceptions_download",
+        )
+        render_csv_download(
+            coverage,
+            label="Export dataset coverage CSV",
+            report_name="dataset-coverage",
+            key="quality_coverage_download",
+        )

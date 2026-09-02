@@ -1,0 +1,60 @@
+{
+  "area": "forecasting",
+  "criteria": [
+    {
+      "actual": null,
+      "criterion": "MAE improvement",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "mae_improvement_percent",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 10%"
+    },
+    {
+      "actual": null,
+      "criterion": "WAPE improvement",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "wape_improvement_percent",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 10%"
+    },
+    {
+      "actual": null,
+      "criterion": "RMSE improvement",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "rmse_improvement_percent",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 10%"
+    },
+    {
+      "actual": null,
+      "criterion": "Forecast bias",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "bias_percent",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": "absolute value <= 5%"
+    },
+    {
+      "actual": null,
+      "criterion": "Prediction interval coverage",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "coverage_percent",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 90%"
+    }
+  ],
+  "dataset": null,
+  "evaluated_at": "2026-08-26T00:00:00+00:00",
+  "evaluation_period": null,
+  "metadata": {
+    "baseline": "Seasonal Naive",
+    "implementation_ready": true
+  },
+  "model_name": "candidate forecast model",
+  "model_version": "unavailable",
+  "schema_version": "1.0"
+}

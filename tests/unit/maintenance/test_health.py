@@ -251,6 +251,9 @@ class TestCalculateEquipmentHealthScore:
         assert result.degradation_score == pytest.approx(expected_degradation)
 
         assert result.health_score == pytest.approx(expected_health)
+        assert dict(result.component_contributions)[
+            "failure_probability"
+        ] == pytest.approx(0.175)
 
     def test_supports_custom_weights(self) -> None:
         weights = HealthScoreWeights(
@@ -274,6 +277,21 @@ class TestCalculateEquipmentHealthScore:
         assert result.degradation_score == pytest.approx(0.25)
 
         assert result.health_score == pytest.approx(75.0)
+
+    def test_includes_confidence_and_historical_trend(self) -> None:
+        result = calculate_equipment_health_score(
+            equipment_id="INV-001",
+            failure_probability=0.40,
+            anomaly_rate=0.30,
+            alarm_burden=0.20,
+            temperature_stress=0.15,
+            performance_loss=0.10,
+            history=[90.0, 85.0, 70.0],
+        )
+
+        assert 0.0 <= result.confidence_score <= 1.0
+        assert result.trend_direction in {"improving", "stable", "degrading"}
+        assert -1.0 <= result.trend_score <= 1.0
 
     def test_higher_degradation_reduces_health(
         self,
@@ -394,6 +412,13 @@ class TestCalculateHealthScores:
 
         assert "health_score" in result.columns
         assert "degradation_score" in result.columns
+        assert "failure_probability_contribution" in result.columns
+        contribution_columns = [
+            column for column in result if column.endswith("_contribution")
+        ]
+        assert result[contribution_columns].sum(axis=1).to_numpy() == pytest.approx(
+            result["degradation_score"].to_numpy()
+        )
 
     def test_returns_one_row_per_equipment(self) -> None:
         frame = _health_frame()
@@ -431,6 +456,9 @@ class TestCalculateHealthScores:
             )
             .all()
         )
+
+        assert "confidence_score" in result.columns
+        assert "trend_direction" in result.columns
 
     def test_more_degraded_equipment_has_lower_health(
         self,

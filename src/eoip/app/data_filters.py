@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -15,6 +16,70 @@ EQUIPMENT_COLUMNS: tuple[str, ...] = (
     "equipment_id",
 )
 DATE_COLUMNS: tuple[str, ...] = ("Date", "Time", "Timestamp", "timestamp")
+
+
+@dataclass(frozen=True, slots=True)
+class FilterDimensions:
+    """Dimensions a page dataset explicitly supports."""
+
+    plant: bool = True
+    equipment: bool = True
+    date: bool = True
+
+
+DEFAULT_FILTER_DIMENSIONS = FilterDimensions()
+
+
+@dataclass(frozen=True, slots=True)
+class PageDataContract:
+    """Immutable filtered views used by every renderer on one page."""
+
+    filters: FilterSelection
+    frames: Mapping[str, pd.DataFrame]
+
+    def scoped(
+        self,
+        name: str,
+        *,
+        dimensions: FilterDimensions = DEFAULT_FILTER_DIMENSIONS,
+    ) -> pd.DataFrame:
+        """Return a fresh, consistently scoped view of a named source frame."""
+        if name not in self.frames:
+            raise KeyError(f"Unknown page dataset: {name}")
+        return apply_dataframe_filters(
+            self.frames[name],
+            self.filters,
+            plant_columns=PLANT_COLUMNS if dimensions.plant else (),
+            equipment_columns=EQUIPMENT_COLUMNS if dimensions.equipment else (),
+            date_columns=DATE_COLUMNS if dimensions.date else (),
+        )
+
+
+def equipment_options_for_plant(
+    dataframe: pd.DataFrame,
+    plant: str,
+    *,
+    plant_columns: Sequence[str] = PLANT_COLUMNS,
+    equipment_columns: Sequence[str] = EQUIPMENT_COLUMNS,
+) -> tuple[str, ...]:
+    """Return valid equipment choices for a selected plant without mutation."""
+    plant_column = first_matching_column(dataframe, plant_columns)
+    equipment_column = first_matching_column(dataframe, equipment_columns)
+    if equipment_column is None:
+        return ("All Equipment",)
+
+    scoped = dataframe
+    if plant_column is not None and plant != "All Plants":
+        scoped = scoped.loc[scoped[plant_column].astype("string").eq(plant)]
+
+    equipment = tuple(
+        sorted(
+            value
+            for value in scoped[equipment_column].dropna().astype(str).unique()
+            if value.strip()
+        )
+    )
+    return ("All Equipment", *equipment)
 
 
 def first_matching_column(
@@ -49,9 +114,11 @@ def apply_dataframe_filters(
 
     date_column = first_matching_column(dataframe, date_columns)
     if date_column is not None:
-        dates = pd.to_datetime(dataframe[date_column], errors="coerce")
-        start = pd.Timestamp(filters.start_date)
-        end = pd.Timestamp(filters.end_date) + pd.Timedelta(days=1)
+        dates = pd.to_datetime(
+            dataframe[date_column], errors="coerce", utc=True, format="mixed"
+        )
+        start = pd.Timestamp(filters.start_date, tz="UTC")
+        end = pd.Timestamp(filters.end_date, tz="UTC") + pd.Timedelta(days=1)
         mask &= dates.ge(start) & dates.lt(end)
 
     return dataframe.loc[mask].copy()

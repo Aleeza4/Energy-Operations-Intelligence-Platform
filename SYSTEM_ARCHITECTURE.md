@@ -1,5 +1,12 @@
 # Energy Operations Intelligence Platform
 
+> **Historical design document.** This file records broad original design
+> intent and may describe configured or planned capabilities. The canonical
+> current-state architecture and evidence boundaries are in
+> [`docs/architecture/SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md).
+> Do not interpret future-tense or financial fields below as verified production
+> behavior.
+
 ## System Architecture
 
 **Project:** Energy Operations Intelligence Platform (EOIP)  

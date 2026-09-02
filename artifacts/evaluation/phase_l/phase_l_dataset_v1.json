@@ -1,0 +1,37 @@
+{
+  "area": "representative_dataset",
+  "configuration_fingerprint": "6f3353ca3450d690caf15f9f016c1c457aab698914166d94a544ddbb824d6d74",
+  "dataset": "RUN-20250101T000000Z-20260827",
+  "end_exclusive": "2025-03-02T00:00:00+00:00",
+  "evaluated_at": "2026-08-27T00:00:00+00:00",
+  "evidence_type": "REPRESENTATIVE_SYNTHETIC",
+  "failure_count": 9,
+  "generated_counts": {
+    "alarm_count": 27,
+    "budget_count": 6,
+    "equipment_count": 44,
+    "generation_run_id": "RUN-20250101T000000Z-20260827",
+    "ground_truth_event_count": 27,
+    "incident_count": 17,
+    "inverter_scada_count": 138240,
+    "plant_count": 2,
+    "plant_scada_count": 11520,
+    "revenue_meter_count": 2,
+    "tariff_count": 2,
+    "weather_count": 11520,
+    "work_order_count": 16
+  },
+  "generation_seconds": 19.77505310000015,
+  "generator_version": "0.1.0",
+  "interval_minutes": 15,
+  "limitations": [
+    "Representative synthetic engineering evidence, not production evidence.",
+    "Two-plant developer-workstation scale; not real-world deployment scale."
+  ],
+  "phase": "L",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "production_evidence": false,
+  "schema_version": "1.0",
+  "seed": 20260827,
+  "start": "2025-01-01T00:00:00+00:00"
+}

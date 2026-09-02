@@ -6,20 +6,33 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from eoip.app import data_access
 from eoip.app.components import (
     MetricCard,
-    format_filter_caption,
+    get_filter_selection,
     render_csv_download,
     render_dataframe,
+    render_empty_state,
     render_global_filters,
     render_metric_row,
     render_page_intro,
     render_plotly_chart,
     render_section_header,
-    render_status,
 )
-from eoip.app.data_filters import apply_dataframe_filters
+from eoip.app.data_filters import (
+    FilterDimensions,
+    PageDataContract,
+    equipment_options_for_plant,
+)
 from eoip.app.navigation import navigate_to
+from eoip.app.theme import (
+    EOIP_CHART_SEQUENCE,
+    EOIP_DANGER,
+    EOIP_PRIMARY,
+    EOIP_SECONDARY,
+    EOIP_WARNING,
+    SEVERITY_COLORS,
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -51,57 +64,6 @@ def _anomaly_trend_data() -> pd.DataFrame:
                 0.19,
             ],
             "Threshold": [0.50] * 16,
-        }
-    )
-
-
-@st.cache_data(show_spinner=False)
-def _active_anomalies_data() -> pd.DataFrame:
-    """Return temporary active-anomaly data."""
-    return pd.DataFrame(
-        {
-            "Anomaly ID": [
-                "ANM-2031",
-                "ANM-2028",
-                "ANM-2026",
-                "ANM-2022",
-            ],
-            "Plant": [
-                "Solar Plant D",
-                "Solar Plant B",
-                "Solar Plant C",
-                "Solar Plant D",
-            ],
-            "Equipment": [
-                "INV-005",
-                "INV-003",
-                "TRF-002",
-                "INV-006",
-            ],
-            "Severity": [
-                "Critical",
-                "High",
-                "High",
-                "Medium",
-            ],
-            "Method": [
-                "Isolation Forest",
-                "Residual Analysis",
-                "Statistical Baseline",
-                "Isolation Forest",
-            ],
-            "Anomaly Score": [
-                0.92,
-                0.84,
-                0.76,
-                0.61,
-            ],
-            "Status": [
-                "Investigating",
-                "Open",
-                "Monitoring",
-                "Open",
-            ],
         }
     )
 
@@ -156,26 +118,65 @@ def _severity_data() -> pd.DataFrame:
     )
 
 
+def build_anomaly_priority(anomalies: pd.DataFrame) -> pd.DataFrame:
+    """Order anomalies by declared severity and then anomaly score."""
+    if anomalies.empty:
+        return anomalies.copy()
+    severity_order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+    priority = anomalies.assign(
+        _severity_order=anomalies["Severity"].map(severity_order).fillna(4)
+    )
+    return priority.sort_values(
+        ["_severity_order", "Anomaly Score"], ascending=[True, False]
+    ).drop(columns="_severity_order")
+
+
 def render() -> None:
     """Render the EOIP Anomaly Dashboard."""
     render_page_intro(
-        title="Anomaly Dashboard",
-        icon="🔍",
+        title="Anomaly Investigation",
+        icon="anomaly",
         description=(
             "Abnormal operating behavior, anomaly scores, "
             "detection performance, and investigation intelligence."
         ),
     )
-    filters = render_global_filters(show_equipment=True)
-    st.caption(format_filter_caption(filters))
+    raw_anomalies = data_access.get_anomalies()
+    current_scope = get_filter_selection()
+    filters = render_global_filters(
+        show_date=False,
+        show_equipment=True,
+        equipment_options=equipment_options_for_plant(
+            raw_anomalies, current_scope.plant
+        ),
+    )
+    contract = PageDataContract(
+        filters,
+        {
+            "anomalies": raw_anomalies,
+            "trend": _anomaly_trend_data(),
+            "performance": _method_performance_data(),
+        },
+    )
+    anomalies = contract.scoped("anomalies", dimensions=FilterDimensions(date=False))
+    if anomalies.empty:
+        render_empty_state(
+            title="No anomaly data",
+            message="No anomalies match the selected plant and equipment scope.",
+        )
+        return
 
-    render_status(
-        "Anomaly detection is operational.",
-        level="success",
+    critical_anomalies = int(anomalies["Severity"].eq("Critical").sum())
+    high_anomalies = int(anomalies["Severity"].eq("High").sum())
+    affected_equipment = int(anomalies["Equipment"].nunique())
+    highest_score = float(anomalies["Anomaly Score"].max())
+    performance = contract.scoped(
+        "performance",
+        dimensions=FilterDimensions(plant=False, equipment=False, date=False),
     )
 
     render_section_header(
-        "Anomaly Overview",
+        "Anomaly Attention Summary",
         description=("Current anomaly volume and detection-quality indicators."),
     )
 
@@ -183,35 +184,72 @@ def render() -> None:
         (
             MetricCard(
                 label="Active Anomalies",
-                value="15",
-                delta="+3",
+                value=len(anomalies),
             ),
             MetricCard(
                 label="Critical Anomalies",
-                value="2",
-                delta="+1",
+                value=critical_anomalies,
             ),
             MetricCard(
-                label="Detection Precision",
-                value="88.0%",
-                delta="+2.1%",
+                label="High-Severity Anomalies",
+                value=high_anomalies,
             ),
             MetricCard(
-                label="Detection Recall",
-                value="87.0%",
-                delta="+1.6%",
+                label="Affected Equipment",
+                value=affected_equipment,
+            ),
+            MetricCard(
+                label="Highest Anomaly Score",
+                value=f"{highest_score:.2f}",
+                subtitle="Source score; not a probability",
             ),
         )
     )
 
-    st.write("")
+    priority = build_anomaly_priority(anomalies)
+    render_section_header(
+        "Highest-Priority Findings",
+        description="Declared severity first, followed by anomaly score.",
+    )
+    render_dataframe(priority)
+    selected_id = st.selectbox(
+        "Anomaly to investigate",
+        options=priority["Anomaly ID"].tolist(),
+        key="anomaly_drilldown_id",
+    )
+    anomaly = priority.loc[priority["Anomaly ID"].eq(selected_id)].iloc[0]
+    render_section_header(
+        "Anomaly Evidence",
+        description=(
+            "Supported finding fields; no timestamp or causal explanation is stored."
+        ),
+    )
+    render_dataframe(pd.DataFrame([anomaly]))
+    with st.container(horizontal=True):
+        if st.button("Inspect asset", key="anomaly_investigate_asset"):
+            navigate_to(
+                "assets",
+                plant=str(anomaly["Plant"]),
+                equipment_id=str(anomaly["Equipment"]),
+            )
+        if st.button("Review maintenance", key="anomaly_open_maintenance"):
+            navigate_to(
+                "maintenance",
+                plant=str(anomaly["Plant"]),
+                equipment_id=str(anomaly["Equipment"]),
+            )
+        if st.button("Review operations", key="anomaly_open_operations"):
+            navigate_to("operations", plant=str(anomaly["Plant"]))
 
     render_section_header(
         "Anomaly Score Trend",
         description=("Recent anomaly scores against the active detection threshold."),
     )
 
-    trend = apply_dataframe_filters(_anomaly_trend_data(), filters)
+    trend = contract.scoped(
+        "trend",
+        dimensions=FilterDimensions(plant=False, equipment=False, date=False),
+    )
 
     trend_long = trend.melt(
         id_vars="Time",
@@ -228,6 +266,7 @@ def render() -> None:
         x="Time",
         y="Score",
         color="Series",
+        color_discrete_map={"Anomaly Score": EOIP_DANGER, "Threshold": EOIP_WARNING},
         markers=True,
     )
 
@@ -245,21 +284,23 @@ def render() -> None:
         legend_title_text="",
     )
 
-    render_plotly_chart(
-        trend_figure,
-        data=trend_long,
-        time_series=True,
-    )
+    if filters.plant == "All Plants" and filters.equipment_id is None:
+        render_plotly_chart(trend_figure, data=trend_long, time_series=True)
+    else:
+        render_empty_state(
+            title="Portfolio-only anomaly trend",
+            message="Choose All Plants and All Equipment to view this source.",
+        )
 
     left_column, right_column = st.columns((3, 2))
 
     with left_column:
         render_section_header(
-            "Detection Performance",
-            description=("Precision, recall, and F1 score by anomaly method."),
+            "Model Diagnostics",
+            description=(
+                "Global model precision, recall, and F1 score by anomaly method."
+            ),
         )
-
-        performance = _method_performance_data()
 
         performance_long = performance.melt(
             id_vars="Method",
@@ -277,6 +318,11 @@ def render() -> None:
             x="Method",
             y="Score (%)",
             color="Metric",
+            color_discrete_map={
+                "Precision (%)": EOIP_PRIMARY,
+                "Recall (%)": EOIP_SECONDARY,
+                "F1 Score (%)": EOIP_CHART_SEQUENCE[2],
+            },
             barmode="group",
         )
 
@@ -305,13 +351,20 @@ def render() -> None:
             description=("Current anomaly distribution by severity."),
         )
 
-        severity = _severity_data()
+        severity = (
+            anomalies["Severity"]
+            .value_counts()
+            .rename_axis("Severity")
+            .reset_index(name="Count")
+        )
 
-        severity_figure = px.pie(
+        severity_figure = px.bar(
             severity,
-            names="Severity",
-            values="Count",
-            hole=0.55,
+            x="Count",
+            y="Severity",
+            orientation="h",
+            color="Severity",
+            color_discrete_map=SEVERITY_COLORS,
         )
 
         severity_figure.update_layout(
@@ -321,7 +374,9 @@ def render() -> None:
                 t=20,
                 b=20,
             ),
-            legend_title_text="",
+            showlegend=False,
+            xaxis_title="Anomalies",
+            yaxis_title="",
         )
 
         render_plotly_chart(
@@ -329,24 +384,6 @@ def render() -> None:
             data=severity,
         )
 
-    render_section_header(
-        "Active Anomaly Investigations",
-        description=("Current abnormal events requiring operational review."),
-    )
-
-    anomalies = apply_dataframe_filters(_active_anomalies_data(), filters)
-
-    render_dataframe(
-        anomalies,
-        column_config={
-            "Anomaly Score": st.column_config.ProgressColumn(
-                "Anomaly Score",
-                min_value=0.0,
-                max_value=1.0,
-                format="%.2f",
-            )
-        },
-    )
     render_csv_download(
         anomalies,
         label="Download active anomalies CSV",
@@ -354,17 +391,3 @@ def render() -> None:
         filters=filters,
         key="anomalies_download",
     )
-
-    if not anomalies.empty:
-        selected_id = st.selectbox(
-            "Anomaly drill-down",
-            options=anomalies["Anomaly ID"].tolist(),
-            key="anomaly_drilldown_id",
-        )
-        anomaly = anomalies.loc[anomalies["Anomaly ID"].eq(selected_id)].iloc[0]
-        if st.button("Investigate asset", key="anomaly_investigate_asset"):
-            navigate_to(
-                "assets",
-                plant=str(anomaly["Plant"]),
-                equipment_id=str(anomaly["Equipment"]),
-            )

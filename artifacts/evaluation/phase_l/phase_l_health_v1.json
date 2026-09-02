@@ -1,0 +1,66 @@
+{
+  "area": "equipment_health",
+  "component_maximum_absolute_sum_error": 6.938893903907228e-18,
+  "coverage_percent": 100.0,
+  "criteria": {
+    "component_breakdown": {
+      "actual": 6.938893903907228e-18,
+      "status": "PASS",
+      "target": "contributions sum to degradation"
+    },
+    "confidence": {
+      "actual": "unsupported",
+      "notes": "No calibrated uncertainty, ensemble variance, or empirical error model exists.",
+      "status": "FAIL",
+      "target": "defensible confidence"
+    },
+    "coverage": {
+      "actual": 100.0,
+      "status": "PASS",
+      "target": "100%"
+    },
+    "ground_truth_validation": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "future independent outcome validation"
+    },
+    "historical_trend": {
+      "actual": null,
+      "notes": "The workflow does not interpolate or manufacture historical health.",
+      "status": "NOT VERIFIED",
+      "target": "validated"
+    }
+  },
+  "dataset": "RUN-20250101T000000Z-20260827",
+  "evaluated_at": "2026-08-27T00:00:00+00:00",
+  "evidence_type": "REPRESENTATIVE_SYNTHETIC",
+  "health_scored_equipment_count": 24,
+  "missing_equipment_ids": [],
+  "monitored_equipment_count": 24,
+  "monitored_population_definition": "All inverter IDs present before scoring in representative telemetry.",
+  "phase": "L",
+  "production_evidence": false,
+  "schema_version": "1.0",
+  "score_summary": {
+    "degradation_score": {
+      "25%": 0.009035250524267163,
+      "50%": 0.03498596203440051,
+      "75%": 0.04181433266934068,
+      "count": 24.0,
+      "max": 0.07805966951384813,
+      "mean": 0.03112665966095703,
+      "min": 0.001562536898407542,
+      "std": 0.022513762270817313
+    },
+    "health_score": {
+      "25%": 95.81856673306592,
+      "50%": 96.50140379655996,
+      "75%": 99.09647494757328,
+      "count": 24.0,
+      "max": 99.84374631015925,
+      "mean": 96.88733403390431,
+      "min": 92.19403304861518,
+      "std": 2.251376227081731
+    }
+  }
+}

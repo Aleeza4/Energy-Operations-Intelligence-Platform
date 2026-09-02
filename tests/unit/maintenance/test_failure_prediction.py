@@ -395,6 +395,24 @@ class TestRandomForestFailurePredictorFit:
             "alarm_count",
         )
 
+    def test_optimizes_probability_threshold_for_recall_and_precision(self) -> None:
+        features = pd.DataFrame(
+            {
+                "active_power_kw": [500, 520, 490, 300, 285, 270, 530, 540, 310, 290],
+                "temperature_c": [40, 38, 41, 78, 82, 79, 39, 40, 80, 85],
+                "alarm_count": [0, 1, 0, 8, 9, 10, 1, 0, 9, 10],
+            }
+        )
+        target = pd.Series([0, 0, 0, 1, 1, 1, 0, 0, 1, 1], name="failure_within_window")
+
+        predictor = RandomForestFailurePredictor(random_state=42)
+        predictor.fit(features, target)
+
+        threshold = predictor.optimize_probability_threshold(features, target)
+
+        assert 0.1 <= threshold <= 0.7
+        assert threshold < 0.8
+
     def test_rejects_empty_features(self) -> None:
         predictor = RandomForestFailurePredictor()
 

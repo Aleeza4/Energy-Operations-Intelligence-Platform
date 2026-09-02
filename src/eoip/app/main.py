@@ -19,9 +19,11 @@ from eoip.app.dashboards import (
     plant_performance,
     recommendations,
 )
+from eoip.app.data_access import BackendUnavailableError
 from eoip.app.layout import (
     configure_page,
-    render_page_footer,
+    render_footer,
+    render_page_header,
     render_sidebar_header,
 )
 from eoip.app.navigation import (
@@ -54,9 +56,7 @@ def render_page_placeholder(
     """Render a temporary page until its dashboard is implemented."""
     page = get_navigation_item(page_key)
 
-    st.title(f"{page.icon} {page.label}")
-
-    st.caption(page.description)
+    render_page_header(page.label, subtitle=page.description, icon=page.icon)
 
     st.info("This dashboard is registered and ready " "for implementation.")
 
@@ -77,9 +77,15 @@ def main() -> None:
     if renderer is None:
         render_page_placeholder(active_page)
     else:
-        renderer()
+        try:
+            renderer()
+        except BackendUnavailableError:
+            st.error(
+                "EOIP backend unavailable. Connect to the configured API and "
+                "provide a valid EOIP_API_ACCESS_TOKEN."
+            )
 
-    render_page_footer()
+    render_footer()
 
 
 if __name__ == "__main__":

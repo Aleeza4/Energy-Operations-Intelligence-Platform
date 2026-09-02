@@ -3,13 +3,25 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from html import escape
 from typing import Any, Literal
 
 import pandas as pd
 import streamlit as st
+
+from eoip.app.components.kpi import (
+    MetricCard as MetricCard,
+)
+from eoip.app.components.kpi import (
+    render_metric_card as render_metric_card,
+)
+from eoip.app.components.kpi import (
+    render_metric_row as render_metric_row,
+)
+from eoip.app.icons import get_icon_svg
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,21 +34,37 @@ StatusLevel = Literal[
 
 
 @dataclass(frozen=True, slots=True)
-class MetricCard:
-    """Configuration for an EOIP metric card."""
+class PageContext:
+    """Known scope metadata for a dashboard page."""
 
-    label: str
-    value: str
-    delta: str | None = None
-    help_text: str | None = None
+    scope: str | None = None
+    period: str | None = None
+    freshness: str | None = None
 
-    def __post_init__(self) -> None:
-        """Validate metric-card configuration."""
-        if not self.label.strip():
-            raise ValueError("Metric label must not be empty.")
 
-        if not self.value.strip():
-            raise ValueError("Metric value must not be empty.")
+def page_context_markup(context: PageContext) -> str:
+    """Build compact escaped markup while omitting unavailable context."""
+    values = (
+        ("Scope", context.scope),
+        ("Period", context.period),
+        ("As of", context.freshness),
+    )
+    items = "".join(
+        '<div class="eoip-context-item">'
+        f"<dt>{label}</dt><dd>{escape(value.strip())}</dd></div>"
+        for label, value in values
+        if value is not None and value.strip()
+    )
+    if not items:
+        return ""
+    return f'<dl class="eoip-page-context">{items}</dl>'
+
+
+def render_page_context(context: PageContext) -> None:
+    """Render known page scope without inventing missing freshness data."""
+    markup = page_context_markup(context)
+    if markup:
+        st.markdown(markup, unsafe_allow_html=True)
 
 
 def render_section_header(
@@ -50,38 +78,17 @@ def render_section_header(
     if not normalized_title:
         raise ValueError("Section title must not be empty.")
 
-    st.subheader(normalized_title)
-
-    if description is not None:
-        normalized_description = description.strip()
-
-        if normalized_description:
-            st.caption(normalized_description)
-
-
-def render_metric_card(
-    metric: MetricCard,
-) -> None:
-    """Render one EOIP KPI metric."""
-    st.metric(
-        label=metric.label,
-        value=metric.value,
-        delta=metric.delta,
-        help=metric.help_text,
-        width="stretch",
+    description_markup = ""
+    if description is not None and description.strip():
+        description_markup = (
+            '<p class="eoip-section-description">' f"{escape(description.strip())}</p>"
+        )
+    st.markdown(
+        '<header class="eoip-section-header">'
+        f'<h2 class="eoip-section-heading">{escape(normalized_title)}</h2>'
+        f"{description_markup}</header>",
+        unsafe_allow_html=True,
     )
-
-
-def render_metric_row(
-    metrics: Sequence[MetricCard],
-) -> None:
-    """Render metrics across a responsive row."""
-    if not metrics:
-        raise ValueError("At least one metric is required.")
-
-    with st.container(horizontal=True, gap="small"):
-        for metric in metrics:
-            render_metric_card(metric)
 
 
 def render_status(
@@ -122,7 +129,10 @@ def render_empty_state(
     if not normalized_message:
         raise ValueError("Empty-state message must not be empty.")
 
-    st.markdown(f"### {normalized_title}")
+    st.markdown(
+        f'<div class="eoip-card-title">{escape(normalized_title)}</div>',
+        unsafe_allow_html=True,
+    )
 
     st.info(normalized_message)
 
@@ -155,7 +165,6 @@ def load_dashboard_data(
         LOGGER.exception("Unable to load dashboard source %s", source_name)
         st.error(
             f"{source_name} is temporarily unavailable. Refresh the page or try again.",
-            icon=":material/error:",
         )
         st.caption(f"Technical detail: {type(error).__name__}")
         return None
@@ -188,14 +197,23 @@ def render_page_intro(
     if not normalized_description:
         raise ValueError("Page description must not be empty.")
 
+    icon_markup = ""
     if icon is not None and icon.strip():
-        heading = f"{icon.strip()} " f"{normalized_title}"
-    else:
-        heading = normalized_title
+        icon_markup = (
+            '<span class="eoip-icon eoip-page-icon">'
+            f"{get_icon_svg(icon.strip(), size=24)}"
+            "</span>"
+        )
 
-    st.title(heading)
-
-    st.caption(normalized_description)
+    st.markdown(
+        '<div class="eoip-page-header">'
+        '<div class="eoip-title-row">'
+        f"{icon_markup}<h1>{escape(normalized_title)}</h1>"
+        "</div>"
+        f'<p class="eoip-page-subtitle">{escape(normalized_description)}</p>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_divider() -> None:

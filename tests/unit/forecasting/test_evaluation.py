@@ -8,10 +8,13 @@ import pytest
 
 from eoip.forecasting.evaluation import (
     ForecastMetrics,
+    calculate_forecast_bias,
     calculate_mae,
     calculate_mape,
+    calculate_prediction_interval_coverage,
     calculate_rmse,
     calculate_smape,
+    calculate_wape,
     evaluate_forecast,
 )
 
@@ -301,6 +304,36 @@ class TestMetricFunctions:
 
         assert result == pytest.approx(0.0)
 
+    def test_calculates_wape_and_handles_zero_denominator(self) -> None:
+        assert calculate_wape(
+            np.array([100.0, 200.0]), np.array([90.0, 220.0])
+        ) == pytest.approx(10.0)
+        assert calculate_wape(np.zeros(2), np.ones(2)) is None
+
+    def test_calculates_signed_bias(self) -> None:
+        actual = np.array([100.0, 100.0])
+        assert calculate_forecast_bias(actual, np.array([110.0, 110.0])) == 10.0
+        assert calculate_forecast_bias(actual, np.array([90.0, 90.0])) == -10.0
+        assert calculate_forecast_bias(np.zeros(2), np.ones(2)) is None
+
+    def test_prediction_interval_coverage(self) -> None:
+        assert (
+            calculate_prediction_interval_coverage(
+                actual=np.array([1.0, 2.0, 3.0, 4.0]),
+                lower=np.array([0.0, 1.0, 3.5, 4.0]),
+                upper=np.array([2.0, 3.0, 4.0, 4.0]),
+            )
+            == 75.0
+        )
+
+    def test_prediction_interval_rejects_invalid_bounds(self) -> None:
+        with pytest.raises(ValueError, match="lower values"):
+            calculate_prediction_interval_coverage(
+                actual=np.array([1.0]),
+                lower=np.array([2.0]),
+                upper=np.array([1.0]),
+            )
+
 
 class TestEvaluateForecast:
     """Tests for complete forecast evaluation."""
@@ -332,6 +365,8 @@ class TestEvaluateForecast:
         assert result.mape is not None
         assert result.smape >= 0.0
         assert result.sample_count == 3
+        assert result.wape == pytest.approx(8.3333333333)
+        assert result.bias == pytest.approx(5.0)
 
     def test_perfect_forecast_returns_zero_error(self) -> None:
         actual = pd.Series(
@@ -351,6 +386,25 @@ class TestEvaluateForecast:
         assert result.rmse == pytest.approx(0.0)
         assert result.mape == pytest.approx(0.0)
         assert result.smape == pytest.approx(0.0)
+        assert result.wape == pytest.approx(0.0)
+        assert result.bias == pytest.approx(0.0)
+
+    def test_evaluates_prediction_interval_coverage(self) -> None:
+        result = evaluate_forecast(
+            actual=pd.Series([10.0, 20.0]),
+            predicted=pd.Series([11.0, 19.0]),
+            lower=pd.Series([9.0, 21.0]),
+            upper=pd.Series([12.0, 22.0]),
+        )
+        assert result.prediction_interval_coverage == 50.0
+
+    def test_rejects_partial_prediction_interval(self) -> None:
+        with pytest.raises(ValueError, match="Both lower and upper"):
+            evaluate_forecast(
+                actual=pd.Series([1.0]),
+                predicted=pd.Series([1.0]),
+                lower=pd.Series([0.0]),
+            )
 
     def test_handles_zero_actual_values(self) -> None:
         result = evaluate_forecast(

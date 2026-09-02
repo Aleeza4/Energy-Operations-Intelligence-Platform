@@ -7,11 +7,13 @@ from dataclasses import dataclass
 import streamlit as st
 
 from eoip.app.components.filters import (
-    DEFAULT_EQUIPMENT,
-    DEFAULT_PLANTS,
+    KNOWN_PLANTS,
     SESSION_EQUIPMENT_KEY,
     SESSION_PLANT_KEY,
+    _is_valid_equipment_id,
+    synchronize_filter_widgets,
 )
+from eoip.app.icons import get_icon_data_uri, resolve_icon_name
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,81 +38,125 @@ class NavigationItem:
             if not value.strip():
                 raise ValueError(f"{name} must not be empty.")
 
+        resolve_icon_name(self.icon)
+
+
+@dataclass(frozen=True, slots=True)
+class NavigationGroup:
+    """Visual grouping of existing EOIP page keys."""
+
+    label: str
+    page_keys: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            raise ValueError("Navigation group label must not be empty.")
+        if not self.page_keys:
+            raise ValueError("Navigation group must contain at least one page.")
+
 
 NAVIGATION_ITEMS: tuple[NavigationItem, ...] = (
     NavigationItem(
         key="executive",
         label="Executive Dashboard",
-        icon="📊",
+        icon="executive",
         description="Portfolio-level performance and business intelligence.",
     ),
     NavigationItem(
         key="operations",
         label="Operations Dashboard",
-        icon="⚙️",
-        description="Real-time operational health and activity.",
+        icon="operations",
+        description="Representative operational health and activity.",
     ),
     NavigationItem(
         key="plant_performance",
         label="Plant Performance",
-        icon="☀️",
+        icon="plant_performance",
         description="Plant production, performance, and energy-loss analytics.",
     ),
     NavigationItem(
         key="assets",
         label="Asset Dashboard",
-        icon="🔧",
+        icon="assets",
         description="Equipment condition and asset-level intelligence.",
     ),
     NavigationItem(
         key="alarms_incidents",
         label="Alarms & Incidents",
-        icon="🚨",
+        icon="alarms_incidents",
         description="Alarm, incident, downtime, and response intelligence.",
     ),
     NavigationItem(
         key="forecast",
         label="Forecast Dashboard",
-        icon="📈",
+        icon="forecast",
         description="Energy forecasts and model performance.",
     ),
     NavigationItem(
         key="anomaly",
         label="Anomaly Dashboard",
-        icon="🔍",
+        icon="anomaly",
         description="Detected anomalies and abnormal operating behavior.",
     ),
     NavigationItem(
         key="maintenance",
         label="Maintenance Dashboard",
-        icon="🛠️",
+        icon="maintenance",
         description="Predictive maintenance and equipment health.",
     ),
     NavigationItem(
         key="recommendations",
         label="Recommendation Center",
-        icon="💡",
+        icon="recommendations",
         description="Prioritized optimization recommendations.",
     ),
     NavigationItem(
         key="data_quality",
         label="Data Quality",
-        icon="✅",
+        icon="data_quality",
         description="Data quality, validation, and pipeline health.",
     ),
     NavigationItem(
         key="administration",
         label="Administration",
-        icon="⚙️",
+        icon="administration",
         description="Application configuration and platform information.",
     ),
+)
+
+NAVIGATION_GROUPS: tuple[NavigationGroup, ...] = (
+    NavigationGroup("Overview", ("executive",)),
+    NavigationGroup(
+        "Operations",
+        ("operations", "plant_performance", "assets", "alarms_incidents"),
+    ),
+    NavigationGroup(
+        "Intelligence",
+        ("forecast", "anomaly", "maintenance", "recommendations"),
+    ),
+    NavigationGroup("Platform", ("data_quality", "administration")),
 )
 
 
 DEFAULT_PAGE_KEY = "executive"
 SESSION_PAGE_KEY = "eoip_active_page"
 SESSION_NAVIGATION_REQUEST_KEY = "eoip_navigation_request"
-SESSION_NAVIGATION_WIDGET_KEY = "eoip_navigation_radio"
+NAVIGATION_BUTTON_KEY_PREFIX = "eoip_nav_"
+
+
+def _validate_navigation_groups() -> None:
+    """Ensure grouping presents every configured page exactly once."""
+    configured_keys = tuple(item.key for item in NAVIGATION_ITEMS)
+    grouped_keys = tuple(
+        page_key for group in NAVIGATION_GROUPS for page_key in group.page_keys
+    )
+    if len(grouped_keys) != len(set(grouped_keys)):
+        raise ValueError("Navigation groups contain duplicate page keys.")
+    if set(grouped_keys) != set(configured_keys):
+        raise ValueError("Navigation groups must contain every configured page.")
+
+
+_validate_navigation_groups()
 
 
 def get_navigation_item(
@@ -167,12 +213,16 @@ def prepare_drilldown_state(
     state = {SESSION_NAVIGATION_REQUEST_KEY: target.key}
 
     if plant is not None:
-        if plant not in DEFAULT_PLANTS:
+        if not plant.strip():
+            raise ValueError("plant must not be empty.")
+        if plant not in KNOWN_PLANTS:
             raise ValueError(f"Unknown plant: {plant}")
         state[SESSION_PLANT_KEY] = plant
 
     if equipment_id is not None:
-        if equipment_id not in DEFAULT_EQUIPMENT or equipment_id == "All Equipment":
+        if not equipment_id.strip() or equipment_id == "All Equipment":
+            raise ValueError("equipment_id must name one equipment record.")
+        if not _is_valid_equipment_id(equipment_id):
             raise ValueError(f"Unknown equipment: {equipment_id}")
         state[SESSION_EQUIPMENT_KEY] = equipment_id
 
@@ -192,6 +242,7 @@ def navigate_to(
         equipment_id=equipment_id,
     ).items():
         st.session_state[key] = value
+    synchronize_filter_widgets(plant=plant, equipment_id=equipment_id)
     st.rerun()
 
 
@@ -202,29 +253,51 @@ def render_navigation() -> str:
     requested_key = st.session_state.pop(SESSION_NAVIGATION_REQUEST_KEY, None)
     if requested_key is not None:
         set_active_page(str(requested_key))
-        st.session_state.pop(SESSION_NAVIGATION_WIDGET_KEY, None)
 
     active_key = get_active_page_key()
 
-    labels = {f"{item.icon}  {item.label}": item.key for item in NAVIGATION_ITEMS}
+    icon_rules = []
+    for item in NAVIGATION_ITEMS:
+        resolve_icon_name(item.icon)
+        button_class = f".st-key-{NAVIGATION_BUTTON_KEY_PREFIX}{item.key}"
+        icon_rules.append(
+            f"{button_class} button::before {{"
+            f'-webkit-mask-image: url("{get_icon_data_uri(item.icon)}");'
+            f'mask-image: url("{get_icon_data_uri(item.icon)}");'
+            "}"
+        )
 
-    active_item = get_navigation_item(active_key)
-
-    active_label = f"{active_item.icon}  " f"{active_item.label}"
-
-    selected_label = st.sidebar.radio(
-        "Navigation",
-        options=list(labels),
-        index=list(labels).index(active_label),
-        key=SESSION_NAVIGATION_WIDGET_KEY,
+    active_button_class = f".st-key-{NAVIGATION_BUTTON_KEY_PREFIX}{active_key}"
+    icon_rules.append(
+        f"{active_button_class} button {{"
+        "background: var(--eoip-primary-soft);"
+        "border-left-color: var(--eoip-primary-dark);"
+        "color: var(--eoip-primary-dark);"
+        "font-weight: var(--eoip-font-weight-bold);"
+        "}"
     )
 
-    selected_key = labels[selected_label]
+    st.sidebar.markdown(
+        f"<style>{''.join(icon_rules)}</style>",
+        unsafe_allow_html=True,
+    )
 
-    set_active_page(selected_key)
+    with st.sidebar.container(key="eoip_navigation", gap=None):
+        for group in NAVIGATION_GROUPS:
+            st.markdown(
+                f'<div class="eoip-nav-group-label">{group.label}</div>',
+                unsafe_allow_html=True,
+            )
+            for page_key in group.page_keys:
+                item = get_navigation_item(page_key)
+                st.button(
+                    item.label,
+                    key=f"{NAVIGATION_BUTTON_KEY_PREFIX}{item.key}",
+                    help=item.description,
+                    on_click=set_active_page,
+                    args=(item.key,),
+                    type="primary" if item.key == active_key else "tertiary",
+                    width="stretch",
+                )
 
-    selected_item = get_navigation_item(selected_key)
-
-    st.sidebar.caption(selected_item.description)
-
-    return selected_key
+    return active_key

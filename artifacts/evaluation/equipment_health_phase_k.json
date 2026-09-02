@@ -1,0 +1,53 @@
+{
+  "area": "equipment_health",
+  "criteria": [
+    {
+      "actual": "available",
+      "criterion": "Component breakdown",
+      "evidence": "Five model inputs are multiplied by their declared weights and sum to degradation_score.",
+      "metric": "weighted_component_contributions",
+      "notes": "",
+      "status": "PASS",
+      "target": "available"
+    },
+    {
+      "actual": "unsupported",
+      "criterion": "Confidence",
+      "evidence": "No uncertainty, calibration, ensemble, or sample-sufficiency model exists.",
+      "metric": "health_confidence",
+      "notes": "",
+      "status": "FAIL",
+      "target": "available"
+    },
+    {
+      "actual": null,
+      "criterion": "Historical validation",
+      "evidence": "Timestamped validation outcomes are unavailable.",
+      "metric": "historical_outcome_validation",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": "completed"
+    },
+    {
+      "actual": null,
+      "criterion": "Ground-truth validation",
+      "evidence": "No accepted health ground-truth label contract exists.",
+      "metric": "health_ground_truth_validation",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": "completed"
+    }
+  ],
+  "dataset": null,
+  "evaluated_at": "2026-08-26T00:00:00+00:00",
+  "evaluation_period": null,
+  "metadata": {
+    "confidence_intentionally_not_derived_from": [
+      "health_score",
+      "failure_probability"
+    ]
+  },
+  "model_name": "weighted degradation score",
+  "model_version": "1.0",
+  "schema_version": "1.0"
+}

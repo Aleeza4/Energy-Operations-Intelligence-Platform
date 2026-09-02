@@ -78,6 +78,11 @@ class Settings:
         secrets.token_urlsafe(32),
     )
     api_token_expiry_minutes: int = int(_get_env("EOIP_API_TOKEN_EXPIRY_MINUTES", "30"))
+    api_base_url: str = _get_env("EOIP_API_BASE_URL", "http://127.0.0.1:8000/api/v1")
+    api_access_token: str = _get_env("EOIP_API_ACCESS_TOKEN", "")
+    api_request_timeout_seconds: float = float(
+        _get_env("EOIP_API_REQUEST_TIMEOUT_SECONDS", "10")
+    )
 
 
 settings = Settings()

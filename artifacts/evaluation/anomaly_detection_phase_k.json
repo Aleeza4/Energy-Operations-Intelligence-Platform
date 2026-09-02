@@ -1,0 +1,60 @@
+{
+  "area": "anomaly_detection",
+  "criteria": [
+    {
+      "actual": null,
+      "criterion": "Critical recall",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "critical_recall",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 0.95"
+    },
+    {
+      "actual": null,
+      "criterion": "Precision",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "precision",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 0.90"
+    },
+    {
+      "actual": null,
+      "criterion": "F1",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "f1",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 0.90"
+    },
+    {
+      "actual": null,
+      "criterion": "False alerts",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "false_alerts_per_asset_day",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": "< 0.20"
+    },
+    {
+      "actual": null,
+      "criterion": "Detection delay",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "detection_delay_minutes",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": "< 15 minutes"
+    }
+  ],
+  "dataset": null,
+  "evaluated_at": "2026-08-26T00:00:00+00:00",
+  "evaluation_period": null,
+  "metadata": {
+    "explicit_asset_exposure_required": true,
+    "ground_truth_required": true
+  },
+  "model_name": "anomaly detector",
+  "model_version": "unavailable",
+  "schema_version": "1.0"
+}

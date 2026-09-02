@@ -1,5 +1,9 @@
 # EOIP Forecasting Models
 
+> **Design/implementation reference.** Current empirical claims are governed by
+> the [forecast model card](FORECAST_MODEL_CARD.md). Prophet did not beat
+> Seasonal Naive on MAE or WAPE in Phase L.
+
 ## Overview
 
 The Energy Operations Intelligence Platform forecasting layer provides reusable

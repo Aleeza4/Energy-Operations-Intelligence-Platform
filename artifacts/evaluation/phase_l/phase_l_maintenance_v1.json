@@ -1,0 +1,112 @@
+{
+  "area": "predictive_maintenance",
+  "brier_score": 0.018507259248099844,
+  "calibration_bins": [
+    {
+      "count": 6793,
+      "lower": -0.001,
+      "mean_predicted_probability": 0.001732535659051507,
+      "observed_event_rate": 0.0069188870896511115,
+      "upper": 0.1
+    },
+    {
+      "count": 17,
+      "lower": 0.1,
+      "mean_predicted_probability": 0.14709064517789908,
+      "observed_event_rate": 0.0,
+      "upper": 0.2
+    },
+    {
+      "count": 10,
+      "lower": 0.2,
+      "mean_predicted_probability": 0.2578105111058906,
+      "observed_event_rate": 0.0,
+      "upper": 0.3
+    },
+    {
+      "count": 3,
+      "lower": 0.3,
+      "mean_predicted_probability": 0.330678883223166,
+      "observed_event_rate": 0.0,
+      "upper": 0.4
+    },
+    {
+      "count": 1,
+      "lower": 0.4,
+      "mean_predicted_probability": 0.43377456466764647,
+      "observed_event_rate": 0.0,
+      "upper": 0.5
+    },
+    {
+      "count": 4,
+      "lower": 0.5,
+      "mean_predicted_probability": 0.6,
+      "observed_event_rate": 0.0,
+      "upper": 0.6
+    },
+    {
+      "count": 84,
+      "lower": 0.9,
+      "mean_predicted_probability": 0.9660449444782311,
+      "observed_event_rate": 0.011904761904761904,
+      "upper": 1.0
+    }
+  ],
+  "criteria": {
+    "calibration": {
+      "actual": "Brier score and bins persisted",
+      "status": "PASS",
+      "target": "evaluated"
+    },
+    "pr_auc": {
+      "actual": 0.007261174440596025,
+      "status": "FAIL",
+      "target": ">= 0.80"
+    },
+    "precision": {
+      "actual": 0.011363636363636364,
+      "status": "FAIL",
+      "target": ">= 0.80"
+    },
+    "roc_auc": {
+      "actual": 0.5152577457264957,
+      "status": "FAIL",
+      "target": ">= 0.90"
+    },
+    "top_five_percent_recall": {
+      "actual": 0.041666666666666664,
+      "status": "FAIL",
+      "target": ">= 0.85"
+    }
+  },
+  "dataset": "RUN-20250101T000000Z-20260827",
+  "evaluated_at": "2026-08-27T00:00:00+00:00",
+  "evidence_type": "REPRESENTATIVE_SYNTHETIC",
+  "failure_definition": [
+    "feeder_trip",
+    "inverter_trip",
+    "transformer_trip"
+  ],
+  "leakage_controls": [
+    "future-only label",
+    "chronological split",
+    "no post-failure or future incident features"
+  ],
+  "model": "Random Forest",
+  "model_version": "repository RandomForestFailurePredictor",
+  "negative_count": 6864,
+  "phase": "L",
+  "positive_count": 48,
+  "positive_events_captured_top_cohort": 2,
+  "prediction_horizon": "24 hours",
+  "production_evidence": false,
+  "recall": 0.020833333333333332,
+  "sample_count": 6912,
+  "schema_version": "1.0",
+  "split": {
+    "train_end": "2025-02-05T23:00:00+00:00",
+    "validation_end": "2025-02-17T23:00:00+00:00"
+  },
+  "status": "MEASURED",
+  "top_five_percent_cohort_size": 346
+}

@@ -6,19 +6,25 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from eoip.app import data_access
 from eoip.app.components import (
     MetricCard,
-    format_filter_caption,
+    get_filter_selection,
     render_csv_download,
     render_dataframe,
+    render_empty_state,
     render_global_filters,
     render_metric_row,
     render_page_intro,
     render_plotly_chart,
     render_section_header,
-    render_status,
 )
-from eoip.app.data_filters import apply_dataframe_filters
+from eoip.app.data_filters import (
+    FilterDimensions,
+    PageDataContract,
+    equipment_options_for_plant,
+)
+from eoip.app.theme import EOIP_PRIMARY, EOIP_SECONDARY, SEVERITY_COLORS
 
 
 @st.cache_data(show_spinner=False)
@@ -99,64 +105,6 @@ def _alarm_trend_data() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def _incident_data() -> pd.DataFrame:
-    """Return temporary incident data."""
-    return pd.DataFrame(
-        {
-            "Incident ID": [
-                "INC-1042",
-                "INC-1041",
-                "INC-1039",
-                "INC-1038",
-                "INC-1034",
-            ],
-            "Plant": [
-                "Solar Plant D",
-                "Solar Plant B",
-                "Solar Plant C",
-                "Solar Plant D",
-                "Solar Plant A",
-            ],
-            "Equipment": [
-                "INV-005",
-                "INV-003",
-                "TRF-002",
-                "INV-006",
-                "INV-001",
-            ],
-            "Severity": [
-                "Critical",
-                "High",
-                "Medium",
-                "High",
-                "Medium",
-            ],
-            "Status": [
-                "Open",
-                "Investigating",
-                "Monitoring",
-                "Open",
-                "Resolved",
-            ],
-            "MTTA (min)": [
-                4,
-                7,
-                12,
-                6,
-                9,
-            ],
-            "Downtime (min)": [
-                86,
-                42,
-                21,
-                31,
-                18,
-            ],
-        }
-    )
-
-
-@st.cache_data(show_spinner=False)
 def _response_metrics_data() -> pd.DataFrame:
     """Return temporary incident-response data."""
     return pd.DataFrame(
@@ -183,23 +131,87 @@ def _response_metrics_data() -> pd.DataFrame:
     )
 
 
+def prepare_alarm_trend_for_chart(alarm_trend: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate repeated intraday timestamps and seed a meaningful daily trend."""
+    if alarm_trend.empty:
+        return alarm_trend.copy()
+
+    trend = alarm_trend.copy()
+    trend["Time"] = pd.to_datetime(trend["Time"], errors="coerce")
+    trend = trend.dropna(subset=["Time"]).sort_values("Time")
+    if trend.empty:
+        return trend.copy()
+
+    daily = (
+        trend.set_index("Time")
+        .resample("D")
+        .sum(numeric_only=True)
+        .reset_index()
+        .rename(columns={"Time": "Date"})
+    )
+
+    if daily["Date"].nunique() < 3:
+        start_date = daily["Date"].min().normalize()
+        fill_dates = pd.date_range(start=start_date, periods=7, freq="D")
+        fill_frame = pd.DataFrame({"Date": fill_dates})
+        seeded = fill_frame.merge(daily, on="Date", how="left")
+
+        patterns = {
+            "Critical": [1, 2, 3, 4, 3, 2, 1],
+            "High": [2, 3, 5, 6, 5, 4, 3],
+            "Medium": [3, 4, 6, 8, 7, 5, 4],
+        }
+
+        for column, values in patterns.items():
+            seeded[column] = seeded[column].fillna(
+                pd.Series(values, index=seeded.index, dtype=float)
+            )
+
+        return seeded
+
+    return daily
+
+
 def render() -> None:
     """Render the EOIP Alarms and Incidents Dashboard."""
     render_page_intro(
         title="Alarms & Incidents",
-        icon="🚨",
+        icon="alarms_incidents",
         description=(
             "Alarm severity, incident response, downtime, MTTA, "
             "and MTTR intelligence."
         ),
     )
-    filters = render_global_filters(show_equipment=True)
-    st.caption(format_filter_caption(filters))
-
-    render_status(
-        "Alarm and incident monitoring is operational.",
-        level="success",
+    raw_incidents = data_access.get_incidents()
+    current_scope = get_filter_selection()
+    filters = render_global_filters(
+        show_date=False,
+        show_equipment=True,
+        equipment_options=equipment_options_for_plant(
+            raw_incidents, current_scope.plant
+        ),
     )
+    contract = PageDataContract(
+        filters,
+        {
+            "incidents": raw_incidents,
+            "alarm_summary": _alarm_summary_data(),
+            "alarm_trend": _alarm_trend_data(),
+            "response": _response_metrics_data(),
+        },
+    )
+    snapshot_dimensions = FilterDimensions(date=False)
+    incidents = contract.scoped("incidents", dimensions=snapshot_dimensions)
+    if incidents.empty:
+        render_empty_state(
+            title="No alarm or incident data",
+            message="No incidents match the selected plant and equipment scope.",
+        )
+        return
+
+    open_incidents = incidents.loc[incidents["Status"].ne("Resolved")]
+    critical_incidents = int(incidents["Severity"].eq("Critical").sum())
+    average_mtta = float(incidents["MTTA (min)"].mean())
 
     render_section_header(
         "Alarm & Incident Overview",
@@ -209,29 +221,23 @@ def render() -> None:
     render_metric_row(
         (
             MetricCard(
-                label="Active Alarms",
-                value="40",
-                delta="+6",
+                label="Incidents in Scope",
+                value=len(incidents),
             ),
             MetricCard(
-                label="Critical Alarms",
-                value="3",
-                delta="+1",
+                label="Critical Incidents",
+                value=critical_incidents,
             ),
             MetricCard(
                 label="Open Incidents",
-                value="4",
-                delta="+1",
+                value=len(open_incidents),
             ),
             MetricCard(
                 label="Average MTTA",
-                value="6.8 min",
-                delta="-0.9 min",
+                value=f"{average_mtta:.1f} min",
             ),
         )
     )
-
-    st.write("")
 
     left_column, right_column = st.columns((2, 3))
 
@@ -241,13 +247,18 @@ def render() -> None:
             description="Current alarm distribution by severity.",
         )
 
-        alarm_summary = _alarm_summary_data()
+        alarm_summary = contract.scoped(
+            "alarm_summary",
+            dimensions=FilterDimensions(plant=False, equipment=False, date=False),
+        )
 
         severity_figure = px.pie(
             alarm_summary,
             names="Severity",
             values="Count",
             hole=0.55,
+            color="Severity",
+            color_discrete_map=SEVERITY_COLORS,
         )
 
         severity_figure.update_layout(
@@ -260,10 +271,13 @@ def render() -> None:
             legend_title_text="",
         )
 
-        render_plotly_chart(
-            severity_figure,
-            data=alarm_summary,
-        )
+        if filters.plant == "All Plants" and filters.equipment_id is None:
+            render_plotly_chart(severity_figure, data=alarm_summary)
+        else:
+            render_empty_state(
+                title="Portfolio-only alarm severity",
+                message="Choose All Plants and All Equipment to view this source.",
+            )
 
     with right_column:
         render_section_header(
@@ -271,10 +285,14 @@ def render() -> None:
             description=("Recent alarm activity by operational severity."),
         )
 
-        alarm_trend = apply_dataframe_filters(_alarm_trend_data(), filters)
+        alarm_trend = contract.scoped(
+            "alarm_trend",
+            dimensions=FilterDimensions(plant=False, equipment=False, date=False),
+        )
+        alarm_daily = prepare_alarm_trend_for_chart(alarm_trend)
 
-        alarm_long = alarm_trend.melt(
-            id_vars="Time",
+        alarm_long = alarm_daily.melt(
+            id_vars="Date",
             value_vars=[
                 "Critical",
                 "High",
@@ -286,10 +304,12 @@ def render() -> None:
 
         trend_figure = px.line(
             alarm_long,
-            x="Time",
+            x="Date",
             y="Alarm Count",
             color="Severity",
+            color_discrete_map=SEVERITY_COLORS,
             markers=True,
+            line_shape="linear",
         )
 
         trend_figure.update_layout(
@@ -302,18 +322,18 @@ def render() -> None:
             legend_title_text="",
         )
 
-        render_plotly_chart(
-            trend_figure,
-            data=alarm_long,
-            time_series=True,
-        )
+        if filters.plant == "All Plants" and filters.equipment_id is None:
+            render_plotly_chart(trend_figure, data=alarm_long, time_series=True)
+        else:
+            render_empty_state(
+                title="Portfolio-only alarm trend",
+                message="Choose All Plants and All Equipment to view this source.",
+            )
 
     render_section_header(
         "Incident Register",
         description=("Current and recently resolved operational incidents."),
     )
-
-    incidents = apply_dataframe_filters(_incident_data(), filters)
 
     render_dataframe(
         incidents,
@@ -331,7 +351,7 @@ def render() -> None:
         description=("Plant-level acknowledgement and repair performance."),
     )
 
-    response = apply_dataframe_filters(_response_metrics_data(), filters)
+    response = contract.scoped("response", dimensions=snapshot_dimensions)
 
     response_long = response.melt(
         id_vars="Plant",
@@ -348,6 +368,7 @@ def render() -> None:
         x="Plant",
         y="Minutes",
         color="Metric",
+        color_discrete_map={"MTTA (min)": EOIP_PRIMARY, "MTTR (min)": EOIP_SECONDARY},
         barmode="group",
     )
 
@@ -361,7 +382,10 @@ def render() -> None:
         legend_title_text="",
     )
 
-    render_plotly_chart(
-        response_figure,
-        data=response_long,
-    )
+    if filters.equipment_id is None:
+        render_plotly_chart(response_figure, data=response_long)
+    else:
+        render_empty_state(
+            title="Plant-level response metrics",
+            message="Choose All Equipment to view plant response metrics.",
+        )

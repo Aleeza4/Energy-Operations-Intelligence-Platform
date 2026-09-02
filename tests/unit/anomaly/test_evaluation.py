@@ -7,8 +7,75 @@ import pytest
 
 from eoip.anomaly.evaluation import (
     GroundTruthEvaluation,
+    calculate_asset_days,
+    calculate_critical_recall,
+    calculate_false_alerts_per_asset_day,
+    evaluate_detection_delay,
     evaluate_ground_truth,
 )
+
+
+def test_confusion_metrics_and_no_predictions() -> None:
+    result = GroundTruthEvaluation(2, 5, 1, 2)
+    assert result.precision == pytest.approx(2 / 3)
+    assert result.recall == pytest.approx(0.5)
+    assert result.f1_score == pytest.approx(4 / 7)
+    assert GroundTruthEvaluation(0, 3, 0, 2).precision == 0.0
+
+
+def test_critical_recall_is_severity_specific() -> None:
+    frame = pd.DataFrame(
+        {
+            "severity": ["critical", "critical", "high"],
+            "is_anomaly": [True, False, True],
+            "is_anomaly_ground_truth": [True, True, True],
+        }
+    )
+    assert calculate_critical_recall(frame=frame) == pytest.approx(0.5)
+
+
+def test_asset_days_and_false_alert_rate_require_exposure() -> None:
+    exposure = pd.DataFrame(
+        {
+            "asset_id": ["A", "B"],
+            "exposure_start": ["2026-01-01T00:00:00Z"] * 2,
+            "exposure_end": ["2026-01-03T00:00:00Z"] * 2,
+        }
+    )
+    days = calculate_asset_days(exposure=exposure)
+    assert days == 4.0
+    assert (
+        calculate_false_alerts_per_asset_day(
+            false_positive_count=1, evaluated_asset_days=days
+        )
+        == 0.25
+    )
+    assert (
+        calculate_false_alerts_per_asset_day(
+            false_positive_count=1, evaluated_asset_days=None
+        )
+        is None
+    )
+    assert calculate_asset_days(exposure=pd.DataFrame({"asset_id": ["A"]})) is None
+
+
+def test_detection_delay_uses_earliest_matching_timestamp() -> None:
+    events = pd.DataFrame(
+        {
+            "event_id": ["E1", "E2"],
+            "started_at": ["2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z"],
+        }
+    )
+    detections = pd.DataFrame(
+        {
+            "event_id": ["E1", "E1"],
+            "detected_at": ["2026-01-01T00:10:00Z", "2026-01-01T00:05:00Z"],
+        }
+    )
+    result = evaluate_detection_delay(events=events, detections=detections)
+    assert result.detected_event_count == 1
+    assert result.eligible_event_count == 2
+    assert result.mean_minutes == 5.0
 
 
 def _frame() -> pd.DataFrame:

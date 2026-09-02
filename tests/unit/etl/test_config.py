@@ -5,6 +5,7 @@ from types import MappingProxyType
 
 import pytest
 
+from eoip.etl import config as etl_config_module
 from eoip.etl.config import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_FLOW_RETRIES,
@@ -23,7 +24,6 @@ from eoip.etl.config import (
     StagingConfig,
     development_config,
     production_config,
-    test_config,
 )
 
 
@@ -299,7 +299,7 @@ class TestConfigurationProfiles:
         assert config.pipeline_name == "eoip-phase3-etl"
 
     def test_test_profile(self) -> None:
-        config = test_config()
+        config = etl_config_module.test_config()
 
         assert config.environment is ETLEnvironment.TEST
         assert config.ingestion.batch_size == 100

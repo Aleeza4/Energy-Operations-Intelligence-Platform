@@ -1,0 +1,53 @@
+{
+  "area": "database_benchmark",
+  "clean_migration": "NOT VERIFIED",
+  "criteria": {
+    "30_day_plant_summary": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "< 2 seconds"
+    },
+    "aggregated_kpi_query": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "< 1 second"
+    },
+    "continuous_aggregates": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "runtime verified"
+    },
+    "critical_index_coverage": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "100%"
+    },
+    "executive_dashboard_query": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "< 2 seconds"
+    },
+    "query_timeout_rate": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "< 1%"
+    },
+    "raw_scada_query": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "< 10 seconds"
+    }
+  },
+  "dataset": "RUN-20250101T000000Z-20260827",
+  "environment": {
+    "database_url_configured": false,
+    "docker_daemon_available": false
+  },
+  "evaluated_at": "2026-08-27T00:00:00+00:00",
+  "evidence_type": "REPRESENTATIVE_SYNTHETIC",
+  "phase": "L",
+  "production_evidence": false,
+  "reason": "No EOIP_DATABASE_URL was configured and the local Docker daemon was unavailable; no database was mutated.",
+  "representative_load": "NOT VERIFIED",
+  "schema_version": "1.0"
+}

@@ -1,5 +1,10 @@
 # EOIP API
 
+> **Historical implementation document.** Use the canonical
+> [API guide](api/API_GUIDE.md) for the configured route inventory,
+> authorization semantics, read-only recommendation boundary, and Phase N
+> runtime-verification boundary.
+
 The Phase 11 FastAPI boundary exposes EOIP database services and persisted
 intelligence outputs without making the Streamlit application depend on a
 running API.

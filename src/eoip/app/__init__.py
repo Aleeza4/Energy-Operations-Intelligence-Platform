@@ -6,7 +6,8 @@ import streamlit as st
 
 from eoip.app.layout import (
     configure_page,
-    render_page_footer,
+    render_footer,
+    render_page_header,
     render_sidebar_header,
 )
 from eoip.app.navigation import (
@@ -23,11 +24,10 @@ def render_page_placeholder(
     """Render a temporary page until its dashboard is implemented."""
     page = get_navigation_item(page_key)
 
-    st.title(f"{page.icon} {page.label}")
-
-    st.caption(page.description)
+    render_page_header(page.label, subtitle=page.description, icon=page.icon)
 
     st.info("This dashboard is registered and ready " "for implementation.")
+    render_footer()
 
 
 def main() -> None:
@@ -43,8 +43,6 @@ def main() -> None:
     active_page = render_navigation()
 
     render_page_placeholder(active_page)
-
-    render_page_footer()
 
 
 if __name__ == "__main__":

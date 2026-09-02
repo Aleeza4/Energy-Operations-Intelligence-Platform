@@ -45,6 +45,7 @@ _RUNS_DIR_NAME: Final[str] = "runs"
 _SOURCE_SYSTEM: Final[str] = "eoip_synthetic"
 _RUN_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _PART_FILE_NAME: Final[str] = "part-00000.parquet"
+_PART_BASENAME_TEMPLATE: Final[str] = "part-{i}.parquet"
 
 _TIMESTAMP_COLUMNS: Final[frozenset[str]] = frozenset(
     {
@@ -414,6 +415,7 @@ class DatasetWriter:
             partition_frame.to_parquet(
                 target,
                 partition_cols=partition_cols,
+                basename_template=_PART_BASENAME_TEMPLATE,
                 compression=compression,
                 index=False,
             )

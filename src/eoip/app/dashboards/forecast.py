@@ -2,88 +2,36 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from eoip.app import data_access
 from eoip.app.components import (
     MetricCard,
-    format_filter_caption,
+    eoip_forecast_style,
     render_csv_download,
     render_dataframe,
+    render_empty_state,
     render_global_filters,
     render_metric_row,
     render_page_intro,
     render_plotly_chart,
     render_section_header,
-    render_status,
 )
-from eoip.app.data_filters import apply_dataframe_filters
-
-
-@st.cache_data(show_spinner=False)
-def _forecast_data() -> pd.DataFrame:
-    """Return temporary energy-forecast data."""
-    dates = pd.date_range(
-        start="2026-08-21",
-        periods=14,
-        freq="D",
-    )
-
-    return pd.DataFrame(
-        {
-            "Date": dates,
-            "Forecast Energy (MWh)": [
-                548.0,
-                562.0,
-                571.0,
-                559.0,
-                584.0,
-                592.0,
-                575.0,
-                601.0,
-                610.0,
-                598.0,
-                615.0,
-                623.0,
-                607.0,
-                631.0,
-            ],
-            "Lower Bound (MWh)": [
-                518.0,
-                531.0,
-                540.0,
-                527.0,
-                551.0,
-                559.0,
-                542.0,
-                567.0,
-                575.0,
-                563.0,
-                580.0,
-                588.0,
-                572.0,
-                595.0,
-            ],
-            "Upper Bound (MWh)": [
-                578.0,
-                593.0,
-                602.0,
-                591.0,
-                617.0,
-                625.0,
-                608.0,
-                635.0,
-                645.0,
-                633.0,
-                650.0,
-                658.0,
-                642.0,
-                667.0,
-            ],
-        }
-    )
+from eoip.app.components.filters import (
+    SESSION_END_DATE_KEY,
+    SESSION_START_DATE_KEY,
+)
+from eoip.app.data_filters import FilterDimensions, PageDataContract
+from eoip.app.navigation import navigate_to
+from eoip.app.theme import (
+    EOIP_PRIMARY,
+    EOIP_SECONDARY,
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -148,26 +96,91 @@ def _plant_forecast_data() -> pd.DataFrame:
     )
 
 
+def calculate_forecast_variance(
+    actual: float, forecast: float
+) -> tuple[float, float | None]:
+    """Return actual-minus-forecast variance with a safe percentage."""
+    variance = actual - forecast
+    percentage = None if forecast == 0 else variance / forecast * 100
+    return variance, percentage
+
+
+def get_default_forecast_date_range(forecast: pd.DataFrame) -> tuple[date, date]:
+    """Return the actual date window supported by the forecast dataset."""
+    if forecast.empty:
+        today = date.today()
+        return today - timedelta(days=6), today
+
+    timestamps = pd.to_datetime(forecast["Date"], errors="coerce")
+    valid = timestamps.dropna()
+    if valid.empty:
+        today = date.today()
+        return today - timedelta(days=6), today
+
+    start = valid.dt.date.min()
+    end = valid.dt.date.max()
+    return start, end
+
+
 def render() -> None:
     """Render the EOIP Forecast Dashboard."""
+    forecast_source = data_access.get_forecasts()
+    default_start, default_end = get_default_forecast_date_range(forecast_source)
+    session_start = st.session_state.get(SESSION_START_DATE_KEY)
+    session_end = st.session_state.get(SESSION_END_DATE_KEY)
+    if (
+        not isinstance(session_start, date)
+        or not isinstance(session_end, date)
+        or session_start < default_start
+        or session_end > default_end
+    ):
+        st.session_state[SESSION_START_DATE_KEY] = default_start
+        st.session_state[SESSION_END_DATE_KEY] = default_end
+
     render_page_intro(
-        title="Forecast Dashboard",
-        icon="📈",
+        title="Forecast Intelligence",
+        icon="forecast",
         description=(
             "Energy forecasting, uncertainty ranges, model accuracy, "
             "and forward-looking production intelligence."
         ),
     )
-    filters = render_global_filters()
-    st.caption(format_filter_caption(filters, show_equipment=False))
-
-    render_status(
-        "Forecasting intelligence is operational.",
-        level="success",
+    filters = render_global_filters(show_plant=False)
+    contract = PageDataContract(
+        filters,
+        {
+            "forecast": forecast_source,
+            "models": _model_comparison_data(),
+            "plant_forecast": _plant_forecast_data(),
+        },
     )
+    forecast = contract.scoped(
+        "forecast", dimensions=FilterDimensions(plant=False, equipment=False)
+    )
+    if forecast.empty:
+        render_empty_state(
+            title="No forecast data",
+            message="No forecast records exist for the selected reporting period.",
+        )
+        return
+
+    forecast_total = float(forecast["Forecast Energy (MWh)"].sum())
+    first_day_forecast = float(forecast.iloc[0]["Forecast Energy (MWh)"])
+    models = contract.scoped(
+        "models",
+        dimensions=FilterDimensions(plant=False, equipment=False, date=False),
+    )
+    plant_forecast = contract.scoped(
+        "plant_forecast",
+        dimensions=FilterDimensions(plant=False, equipment=False, date=False),
+    )
+    average_range = float(
+        (forecast["Upper Bound (MWh)"] - forecast["Lower Bound (MWh)"]).mean()
+    )
+    horizon_days = int((forecast["Date"].max() - forecast["Date"].min()).days + 1)
 
     render_section_header(
-        "Forecast Overview",
+        "Forecast Outlook",
         description=(
             "Forward-looking portfolio energy and model-performance indicators."
         ),
@@ -176,38 +189,32 @@ def render() -> None:
     render_metric_row(
         (
             MetricCard(
-                label="Tomorrow Forecast",
-                value="562 MWh",
-                delta="+2.6%",
+                label="First Day Forecast",
+                value=f"{first_day_forecast:.0f} MWh",
             ),
             MetricCard(
-                label="7-Day Forecast",
-                value="3.99 GWh",
-                delta="+3.1%",
+                label="Selected-Period Forecast",
+                value=f"{forecast_total / 1000:.2f} GWh",
             ),
             MetricCard(
-                label="Forecast MAPE",
-                value="4.8%",
-                delta="-0.7%",
+                label="Forecast Horizon",
+                value=f"{horizon_days} days",
             ),
             MetricCard(
-                label="Forecast Confidence",
-                value="92.0%",
-                delta="+1.4%",
+                label="Average Forecast Range",
+                value=f"{average_range:.0f} MWh",
+                subtitle="Upper bound minus lower bound",
             ),
         )
     )
 
-    st.write("")
-
     render_section_header(
-        "14-Day Energy Forecast",
+        "Expected Performance",
         description=("Expected portfolio production with forecast uncertainty bounds."),
     )
 
-    forecast = apply_dataframe_filters(_forecast_data(), filters)
-
     figure = go.Figure()
+    forecast_style = eoip_forecast_style()
 
     figure.add_trace(
         go.Scatter(
@@ -227,6 +234,7 @@ def render() -> None:
             mode="lines",
             line={"width": 0},
             fill="tonexty",
+            fillcolor=forecast_style["confidence_fill"],
             name="Forecast Range",
         )
     )
@@ -237,6 +245,8 @@ def render() -> None:
             y=forecast["Forecast Energy (MWh)"],
             mode="lines+markers",
             name="Forecast Energy",
+            line=forecast_style["forecast_line"],
+            marker={"color": forecast_style["forecast_line"]["color"]},
         )
     )
 
@@ -258,15 +268,27 @@ def render() -> None:
         time_series=True,
     )
 
+    render_section_header(
+        "Forecast Detail",
+        description="Portfolio forecast and supported uncertainty bounds by date.",
+    )
+    render_dataframe(
+        forecast,
+        column_config={
+            "Date": st.column_config.DateColumn(format="DD MMM YYYY"),
+            "Forecast Energy (MWh)": st.column_config.NumberColumn(format="%.0f MWh"),
+            "Lower Bound (MWh)": st.column_config.NumberColumn(format="%.0f MWh"),
+            "Upper Bound (MWh)": st.column_config.NumberColumn(format="%.0f MWh"),
+        },
+    )
+
     left_column, right_column = st.columns((3, 2))
 
     with left_column:
         render_section_header(
-            "Model Performance",
-            description=("Backtesting accuracy across forecasting approaches."),
+            "Model Diagnostics",
+            description=("Global backtesting accuracy across forecasting approaches."),
         )
-
-        models = _model_comparison_data()
 
         model_long = models.melt(
             id_vars="Model",
@@ -283,6 +305,10 @@ def render() -> None:
             x="Model",
             y="Error",
             color="Metric",
+            color_discrete_map={
+                "MAE (MWh)": EOIP_PRIMARY,
+                "RMSE (MWh)": EOIP_SECONDARY,
+            },
             barmode="group",
         )
 
@@ -304,7 +330,7 @@ def render() -> None:
     with right_column:
         render_section_header(
             "Model Accuracy",
-            description=("Backtesting error metrics used for model selection."),
+            description=("Global error metrics used for model selection."),
         )
 
         render_dataframe(
@@ -313,10 +339,8 @@ def render() -> None:
 
     render_section_header(
         "Plant-Level Forecast",
-        description=("Forward production expectations and confidence by plant."),
+        description=("Portfolio plant expectations; this table is not date-filtered."),
     )
-
-    plant_forecast = apply_dataframe_filters(_plant_forecast_data(), filters)
 
     render_dataframe(
         plant_forecast,
@@ -338,8 +362,15 @@ def render() -> None:
     )
     render_csv_download(
         models,
-        label="Download model comparison CSV",
+        label="Download global model comparison CSV",
         report_name="forecast-model-comparison",
-        filters=filters,
         key="forecast_models_download",
     )
+
+    render_section_header(
+        "Investigation Actions",
+        description="Continue with portfolio-level operational context.",
+    )
+    with st.container(horizontal=True):
+        if st.button("Review operations", key="forecast_open_operations"):
+            navigate_to("operations")

@@ -9,6 +9,8 @@ from eoip.forecasting.backtesting import expanding_window_backtest
 from eoip.forecasting.comparison import (
     ModelEvaluationSummary,
     aggregate_backtest_metrics,
+    calculate_error_improvement,
+    compare_model_summaries,
     evaluate_backtest_fold,
     rank_model_summaries,
 )
@@ -220,6 +222,26 @@ class TestAggregateBacktestMetrics:
         assert summary.mae > 0.0
         assert summary.rmse >= summary.mae
         assert summary.smape >= 0.0
+        assert summary.wape is not None
+
+
+def test_error_improvement_and_zero_baseline() -> None:
+    assert calculate_error_improvement(
+        baseline_error=100.0, candidate_error=80.0
+    ) == pytest.approx(20.0)
+    assert calculate_error_improvement(baseline_error=0.0, candidate_error=0.0) is None
+
+
+def test_comparison_requires_matching_populations() -> None:
+    candidate = ModelEvaluationSummary("candidate", 8, 9, 8, 8, 2, 10, wape=8)
+    baseline = ModelEvaluationSummary("baseline", 10, 12, 10, 10, 2, 10, wape=10)
+    result = compare_model_summaries(candidate=candidate, baseline=baseline)
+    assert result.mae_improvement == pytest.approx(20.0)
+    assert result.wape_improvement == pytest.approx(20.0)
+
+    mismatched = ModelEvaluationSummary("other", 10, 12, 10, 10, 1, 5, wape=10)
+    with pytest.raises(ValueError, match="populations must match"):
+        compare_model_summaries(candidate=candidate, baseline=mismatched)
 
     def test_rejects_empty_fold_list(self) -> None:
         with pytest.raises(

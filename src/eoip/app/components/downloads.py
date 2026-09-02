@@ -63,5 +63,4 @@ def render_csv_download(
         mime="text/csv; charset=utf-8",
         disabled=dataframe.empty,
         key=key,
-        icon=":material/download:",
     )

@@ -3,162 +3,89 @@
 from __future__ import annotations
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
+from eoip.app import data_access
 from eoip.app.components import (
     MetricCard,
-    format_filter_caption,
+    get_filter_selection,
     render_csv_download,
     render_dataframe,
+    render_empty_state,
     render_global_filters,
     render_metric_row,
     render_page_intro,
-    render_plotly_chart,
     render_section_header,
-    render_status,
 )
-from eoip.app.data_filters import apply_dataframe_filters
+from eoip.app.data_filters import (
+    FilterDimensions,
+    PageDataContract,
+    equipment_options_for_plant,
+)
 from eoip.app.navigation import navigate_to
 
 
-@st.cache_data(show_spinner=False)
-def _recommendation_data() -> pd.DataFrame:
-    """Return temporary optimization recommendation data."""
-    return pd.DataFrame(
-        {
-            "Priority Rank": [
-                1,
-                2,
-                3,
-                4,
-                5,
-            ],
-            "Equipment ID": [
-                "INV-005",
-                "INV-003",
-                "TRF-004",
-                "INV-006",
-                "INV-002",
-            ],
-            "Plant": [
-                "Solar Plant D",
-                "Solar Plant B",
-                "Solar Plant D",
-                "Solar Plant C",
-                "Solar Plant A",
-            ],
-            "Recommendation Type": [
-                "maintenance",
-                "performance_recovery",
-                "maintenance",
-                "monitor",
-                "performance_recovery",
-            ],
-            "Risk Score": [
-                0.86,
-                0.68,
-                0.72,
-                0.44,
-                0.31,
-            ],
-            "Recoverable Energy (kWh)": [
-                4200.0,
-                7600.0,
-                1800.0,
-                900.0,
-                2400.0,
-            ],
-            "Net Financial Impact ($)": [
-                18200.0,
-                14600.0,
-                9800.0,
-                2300.0,
-                5100.0,
-            ],
-            "ROI (%)": [
-                284.0,
-                196.0,
-                163.0,
-                48.0,
-                92.0,
-            ],
-        }
-    )
+def build_recommendation_priority(recommendations: pd.DataFrame) -> pd.DataFrame:
+    """Order recommendations by the existing source priority rank."""
+    if recommendations.empty:
+        return recommendations.copy()
+    return recommendations.sort_values(["Priority Rank", "Equipment ID"], kind="stable")
 
 
-@st.cache_data(show_spinner=False)
-def _scenario_data() -> pd.DataFrame:
-    """Return temporary scenario-analysis data."""
-    return pd.DataFrame(
-        {
-            "Scenario": [
-                "Baseline",
-                "Maintenance Intervention",
-                "Performance Recovery",
-                "Combined Action",
-            ],
-            "Energy (MWh)": [
-                15280.0,
-                15440.0,
-                15620.0,
-                15780.0,
-            ],
-            "Operating Cost ($)": [
-                68400.0,
-                63100.0,
-                64800.0,
-                59800.0,
-            ],
-            "Portfolio Risk": [
-                0.42,
-                0.31,
-                0.38,
-                0.24,
-            ],
-        }
-    )
-
-
-@st.cache_data(show_spinner=False)
-def _financial_summary_data() -> pd.DataFrame:
-    """Return temporary financial-impact summary."""
-    return pd.DataFrame(
-        {
-            "Impact Type": [
-                "Recovered Energy Value",
-                "Avoided Failure Cost",
-                "Operating Cost Saving",
-            ],
-            "Value ($)": [
-                16800.0,
-                24100.0,
-                9100.0,
-            ],
-        }
+def aggregate_recommendation_impact(
+    recommendations: pd.DataFrame,
+) -> tuple[float, float | None]:
+    """Aggregate supported energy and financial impact without combining units."""
+    if recommendations.empty:
+        return 0.0, None
+    financial = pd.to_numeric(
+        recommendations.get("Financial Impact"), errors="coerce"
+    ).dropna()
+    return float(recommendations["Recoverable Energy (kWh)"].sum()), (
+        float(financial.sum()) if not financial.empty else None
     )
 
 
 def render() -> None:
     """Render the EOIP Recommendation Center."""
     render_page_intro(
-        title="Recommendation Center",
-        icon="💡",
+        title="Decision & Action Center",
+        icon="recommendations",
         description=(
-            "Prioritized optimization actions, recoverable opportunity, "
-            "financial impact, ROI, and scenario intelligence."
+            "Prioritized actions with explicit governance, provenance, and "
+            "financial availability semantics."
         ),
     )
-    filters = render_global_filters(show_equipment=True)
-    st.caption(format_filter_caption(filters))
+    raw_recommendations = data_access.get_recommendations()
+    current_scope = get_filter_selection()
+    filters = render_global_filters(
+        show_date=False,
+        show_equipment=True,
+        equipment_options=equipment_options_for_plant(
+            raw_recommendations, current_scope.plant
+        ),
+    )
+    contract = PageDataContract(
+        filters,
+        {"recommendations": raw_recommendations},
+    )
+    recommendations = contract.scoped(
+        "recommendations", dimensions=FilterDimensions(date=False)
+    )
+    if recommendations.empty:
+        render_empty_state(
+            title="No recommendations",
+            message="No recommendations match the selected asset scope.",
+        )
+        return
 
-    render_status(
-        "Optimization recommendations are operational.",
-        level="success",
+    recommendations = build_recommendation_priority(recommendations)
+    recoverable_energy, financial_impact = aggregate_recommendation_impact(
+        recommendations
     )
 
     render_section_header(
-        "Optimization Overview",
+        "Opportunity Summary",
         description=("Highest-value opportunities identified across the portfolio."),
     )
 
@@ -166,36 +93,31 @@ def render() -> None:
         (
             MetricCard(
                 label="Active Recommendations",
-                value="18",
-                delta="+4",
+                value=len(recommendations),
             ),
             MetricCard(
                 label="Recoverable Energy",
-                value="16.9 MWh",
-                delta="+6.1%",
+                value=f"{recoverable_energy / 1000:.1f} MWh",
             ),
             MetricCard(
-                label="Net Financial Impact",
-                value="$50.0K",
-                delta="+9.4%",
+                label="Financial conversion",
+                value=("Available" if financial_impact is not None else "Unavailable"),
+                subtitle=(
+                    None
+                    if financial_impact is not None
+                    else "No approved price, currency, cost, or horizon assumptions"
+                ),
             ),
             MetricCard(
-                label="Average ROI",
-                value="156%",
-                delta="+18%",
+                label="Top Priority",
+                value=f"Rank {int(recommendations['Priority Rank'].min())}",
             ),
         )
     )
 
-    st.write("")
-
-    recommendations = apply_dataframe_filters(_recommendation_data(), filters)
-
     render_section_header(
-        "Prioritized Recommendations",
-        description=(
-            "Recommended actions ranked by operational and financial priority."
-        ),
+        "Priority Actions",
+        description=("Recommended actions ranked by the existing source priority."),
     )
 
     render_dataframe(
@@ -206,14 +128,6 @@ def render() -> None:
                 min_value=0.0,
                 max_value=1.0,
                 format="%.2f",
-            ),
-            "Net Financial Impact ($)": st.column_config.NumberColumn(
-                "Net Financial Impact ($)",
-                format="$%.0f",
-            ),
-            "ROI (%)": st.column_config.NumberColumn(
-                "ROI (%)",
-                format="%.0f%%",
             ),
         },
     )
@@ -234,142 +148,43 @@ def render() -> None:
         recommendation = recommendations.loc[
             recommendations["Equipment ID"].eq(selected_equipment)
         ].iloc[0]
-        target = (
-            "maintenance"
-            if recommendation["Recommendation Type"] == "maintenance"
-            else "assets"
-        )
-        if st.button("Open recommended action", key="recommendations_open_action"):
-            navigate_to(
-                target,
-                plant=str(recommendation["Plant"]),
-                equipment_id=str(recommendation["Equipment ID"]),
-            )
-
-    left_column, right_column = st.columns((3, 2))
-
-    with left_column:
         render_section_header(
-            "Financial Opportunity by Asset",
-            description=("Estimated net value generated by recommended actions."),
-        )
-
-        financial_figure = px.bar(
-            recommendations,
-            x="Equipment ID",
-            y="Net Financial Impact ($)",
-            color="Recommendation Type",
-        )
-
-        financial_figure.update_layout(
-            margin=dict(
-                l=20,
-                r=20,
-                t=20,
-                b=20,
+            "Recommendation Detail",
+            description=(
+                "Governance, provenance, evidence, and availability fields for "
+                "the selected recommendation."
             ),
-            legend_title_text="",
         )
-
-        render_plotly_chart(
-            financial_figure,
-            data=recommendations,
-        )
-
-    with right_column:
-        render_section_header(
-            "Financial Benefit Mix",
-            description=("Sources of projected financial benefit."),
-        )
-
-        financial_summary = _financial_summary_data()
-
-        financial_mix_figure = px.pie(
-            financial_summary,
-            names="Impact Type",
-            values="Value ($)",
-            hole=0.55,
-        )
-
-        financial_mix_figure.update_layout(
-            margin=dict(
-                l=20,
-                r=20,
-                t=20,
-                b=20,
-            ),
-            legend_title_text="",
-        )
-
-        render_plotly_chart(
-            financial_mix_figure,
-            data=financial_summary,
-        )
+        render_dataframe(pd.DataFrame([recommendation]))
+        with st.container(horizontal=True):
+            if st.button("Inspect asset", key="recommendations_open_asset"):
+                navigate_to(
+                    "assets",
+                    plant=str(recommendation["Plant"]),
+                    equipment_id=str(recommendation["Equipment ID"]),
+                )
+            if st.button("Review maintenance", key="recommendations_open_maintenance"):
+                navigate_to(
+                    "maintenance",
+                    plant=str(recommendation["Plant"]),
+                    equipment_id=str(recommendation["Equipment ID"]),
+                )
+            if st.button("Review plant performance", key="recommendations_open_plant"):
+                navigate_to("plant_performance", plant=str(recommendation["Plant"]))
+            if st.button("Review operations", key="recommendations_open_operations"):
+                navigate_to("operations", plant=str(recommendation["Plant"]))
 
     render_section_header(
-        "Scenario Analysis",
-        description=("Comparison of baseline and intervention scenarios."),
-    )
-
-    scenarios = _scenario_data()
-
-    scenario_long = scenarios.melt(
-        id_vars="Scenario",
-        value_vars=[
-            "Energy (MWh)",
-            "Operating Cost ($)",
-        ],
-        var_name="Metric",
-        value_name="Value",
-    )
-
-    scenario_figure = px.bar(
-        scenario_long,
-        x="Scenario",
-        y="Value",
-        color="Metric",
-        barmode="group",
-    )
-
-    scenario_figure.update_layout(
-        margin=dict(
-            l=20,
-            r=20,
-            t=20,
-            b=20,
+        "Financial traceability",
+        description=(
+            "Monetary conversion is withheld until approved, versioned business "
+            "assumptions establish price, currency, cost, and analysis horizon."
         ),
-        legend_title_text="",
     )
-
-    render_plotly_chart(
-        scenario_figure,
-        data=scenario_long,
-    )
-
-    render_section_header(
-        "Scenario Summary",
-        description=("Energy, operating cost, and portfolio-risk comparison."),
-    )
-
-    render_dataframe(
-        scenarios,
-        column_config={
-            "Portfolio Risk": st.column_config.ProgressColumn(
-                "Portfolio Risk",
-                min_value=0.0,
-                max_value=1.0,
-                format="%.2f",
-            ),
-            "Operating Cost ($)": st.column_config.NumberColumn(
-                "Operating Cost ($)",
-                format="$%.0f",
-            ),
-        },
-    )
-    render_csv_download(
-        scenarios,
-        label="Download scenario analysis CSV",
-        report_name="scenario-analysis",
-        filters=filters,
-        key="scenarios_download",
+    render_empty_state(
+        title="Revenue at Risk unavailable",
+        message=(
+            "No approved energy-price assumption, currency, or future "
+            "energy-at-risk horizon is configured."
+        ),
     )

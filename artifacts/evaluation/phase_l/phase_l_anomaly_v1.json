@@ -1,0 +1,73 @@
+{
+  "area": "anomaly_detection",
+  "asset_day_formula": "sum(end_exclusive - start) / 24 hours for evaluated active plant",
+  "asset_days": 12.0,
+  "confusion_matrix": {
+    "fn": 0,
+    "fp": 2,
+    "tn": 1150,
+    "tp": 0
+  },
+  "criteria": {
+    "critical_recall": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": ">= 0.95"
+    },
+    "detection_delay_conservative_p95_minutes": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "< 15"
+    },
+    "f1": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": ">= 0.90"
+    },
+    "false_alerts_per_asset_day": {
+      "actual": 0.16666666666666666,
+      "status": "PASS",
+      "target": "< 0.20"
+    },
+    "precision": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": ">= 0.90"
+    },
+    "recall": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "reported"
+    }
+  },
+  "critical_event_count": 0,
+  "dataset": "RUN-20250101T000000Z-20260827",
+  "delay_acceptance_semantics": "p95 used conservatively; source criterion did not name an aggregation.",
+  "delay_minutes": {
+    "detected_event_count": 0,
+    "eligible_event_count": 0,
+    "maximum": null,
+    "mean_minutes": null,
+    "median_minutes": null,
+    "p95_minutes": null
+  },
+  "detector": "Isolation Forest",
+  "detector_version": "repository implementation",
+  "evaluated_at": "2026-08-27T00:00:00+00:00",
+  "event_count": 0,
+  "evidence_type": "REPRESENTATIVE_SYNTHETIC",
+  "ground_truth_method": "Events were scheduled independently before detector execution; truth was not derived from predictions.",
+  "phase": "L",
+  "plant_id": "PLANT-001",
+  "production_evidence": false,
+  "sample_count": 1152,
+  "schema_version": "1.0",
+  "test_period": {
+    "end_exclusive": "2025-03-02T00:00:00+00:00",
+    "start": "2025-02-18T00:00:00+00:00"
+  },
+  "threshold": {
+    "contamination": 0.001,
+    "selected_from": "independent truth prevalence for fixed benchmark"
+  }
+}

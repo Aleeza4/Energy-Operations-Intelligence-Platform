@@ -1,5 +1,9 @@
 # EOIP Predictive Maintenance Models
 
+> **Design/implementation reference.** Use the
+> [maintenance model card](MAINTENANCE_MODEL_CARD.md) for empirical status. Phase
+> L discrimination, precision, and top-cohort recall criteria failed.
+
 ## Overview
 
 The Energy Operations Intelligence Platform predictive-maintenance layer

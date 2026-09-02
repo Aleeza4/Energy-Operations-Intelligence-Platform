@@ -22,6 +22,9 @@ class ModelEvaluationSummary:
     smape: float
     fold_count: int
     sample_count: int
+    wape: float | None = None
+    bias: float | None = None
+    prediction_interval_coverage: float | None = None
 
     def __post_init__(self) -> None:
         """Validate model evaluation summary."""
@@ -47,6 +50,52 @@ class ModelEvaluationSummary:
             raise ValueError("sample_count must be greater than zero.")
 
 
+def calculate_error_improvement(
+    *, baseline_error: float | None, candidate_error: float | None
+) -> float | None:
+    """Return candidate improvement over baseline as a percentage."""
+    if baseline_error is None or candidate_error is None or baseline_error == 0.0:
+        return None
+    if baseline_error < 0.0 or candidate_error < 0.0:
+        raise ValueError("Error metrics must not be negative.")
+    return (baseline_error - candidate_error) / baseline_error * 100.0
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastBaselineComparison:
+    """Like-for-like candidate and baseline backtest comparison."""
+
+    candidate: ModelEvaluationSummary
+    baseline: ModelEvaluationSummary
+    mae_improvement: float | None
+    rmse_improvement: float | None
+    wape_improvement: float | None
+
+
+def compare_model_summaries(
+    *, candidate: ModelEvaluationSummary, baseline: ModelEvaluationSummary
+) -> ForecastBaselineComparison:
+    """Compare summaries evaluated over an identical population."""
+    if (
+        candidate.fold_count != baseline.fold_count
+        or candidate.sample_count != baseline.sample_count
+    ):
+        raise ValueError("Candidate and baseline evaluation populations must match.")
+    return ForecastBaselineComparison(
+        candidate=candidate,
+        baseline=baseline,
+        mae_improvement=calculate_error_improvement(
+            baseline_error=baseline.mae, candidate_error=candidate.mae
+        ),
+        rmse_improvement=calculate_error_improvement(
+            baseline_error=baseline.rmse, candidate_error=candidate.rmse
+        ),
+        wape_improvement=calculate_error_improvement(
+            baseline_error=baseline.wape, candidate_error=candidate.wape
+        ),
+    )
+
+
 def evaluate_backtest_fold(
     fold: BacktestFoldResult,
 ) -> ForecastMetrics:
@@ -55,9 +104,22 @@ def evaluate_backtest_fold(
 
     predicted = fold.forecast.predictions["prediction"].reset_index(drop=True)
 
+    predictions = fold.forecast.predictions
+    lower = (
+        predictions["lower_bound"].reset_index(drop=True)
+        if "lower_bound" in predictions
+        else None
+    )
+    upper = (
+        predictions["upper_bound"].reset_index(drop=True)
+        if "upper_bound" in predictions
+        else None
+    )
     return evaluate_forecast(
         actual=actual,
         predicted=predicted,
+        lower=lower,
+        upper=upper,
     )
 
 
@@ -78,6 +140,12 @@ def aggregate_backtest_metrics(
 
     actual_values: list[float] = []
     predicted_values: list[float] = []
+    lower_values: list[float] = []
+    upper_values: list[float] = []
+    all_folds_have_intervals = all(
+        {"lower_bound", "upper_bound"}.issubset(fold.forecast.predictions.columns)
+        for fold in fold_list
+    )
 
     for fold in fold_list:
         actual_values.extend(fold.actuals["actual"].astype(float).tolist())
@@ -85,6 +153,13 @@ def aggregate_backtest_metrics(
         predicted_values.extend(
             fold.forecast.predictions["prediction"].astype(float).tolist()
         )
+        if all_folds_have_intervals:
+            lower_values.extend(
+                fold.forecast.predictions["lower_bound"].astype(float).tolist()
+            )
+            upper_values.extend(
+                fold.forecast.predictions["upper_bound"].astype(float).tolist()
+            )
 
     metrics = evaluate_forecast(
         actual=pd.Series(
@@ -94,6 +169,12 @@ def aggregate_backtest_metrics(
         predicted=pd.Series(
             predicted_values,
             dtype=float,
+        ),
+        lower=(
+            pd.Series(lower_values, dtype=float) if all_folds_have_intervals else None
+        ),
+        upper=(
+            pd.Series(upper_values, dtype=float) if all_folds_have_intervals else None
         ),
     )
 
@@ -105,6 +186,9 @@ def aggregate_backtest_metrics(
         smape=metrics.smape,
         fold_count=len(fold_list),
         sample_count=metrics.sample_count,
+        wape=metrics.wape,
+        bias=metrics.bias,
+        prediction_interval_coverage=metrics.prediction_interval_coverage,
     )
 
 
@@ -121,6 +205,7 @@ def rank_model_summaries(
     - rmse
     - mape
     - smape
+    - wape
     """
     summary_list = list(summaries)
 
@@ -132,13 +217,20 @@ def rank_model_summaries(
         "rmse",
         "mape",
         "smape",
+        "wape",
     }
 
     if metric not in supported_metrics:
         raise ValueError(f"Unsupported ranking metric: {metric}")
 
-    if metric == "mape" and any(summary.mape is None for summary in summary_list):
-        raise ValueError("Cannot rank by MAPE when a model has undefined MAPE.")
+    if metric in {"mape", "wape"} and any(
+        getattr(summary, metric) is None for summary in summary_list
+    ):
+        if metric == "mape":
+            raise ValueError("Cannot rank by MAPE when a model has undefined MAPE.")
+        raise ValueError(
+            f"Cannot rank by {metric.upper()} when a model has an undefined value."
+        )
 
     return sorted(
         summary_list,

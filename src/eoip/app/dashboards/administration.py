@@ -1,240 +1,237 @@
-"""Administration page for the EOIP Streamlit application."""
+"""Read-only platform administration and governance workspace."""
 
 from __future__ import annotations
+
+from dataclasses import fields
 
 import pandas as pd
 import streamlit as st
 
+import eoip.database.models  # noqa: F401
+from eoip import __version__
+from eoip.api.app import create_app
+from eoip.api.schemas import Role
 from eoip.app.components import (
-    MetricCard,
+    PageContext,
     render_dataframe,
-    render_metric_row,
+    render_empty_state,
+    render_page_context,
     render_page_intro,
     render_section_header,
-    render_status,
+)
+from eoip.config.settings import Settings, settings
+from eoip.database.base import Base
+
+SAFE_ADMIN_FIELDS: tuple[str, ...] = (
+    "project_name",
+    "api_environment",
+    "api_prefix",
+    "api_version",
+    "database_host",
+    "database_port",
+    "database_name",
+    "log_level",
+)
+SENSITIVE_FIELD_MARKERS: tuple[str, ...] = (
+    "password",
+    "secret",
+    "token",
+    "api_key",
+    "private_key",
+    "database_url",
 )
 
 
-@st.cache_data(show_spinner=False)
-def _platform_modules_data() -> pd.DataFrame:
-    """Return temporary EOIP platform-module status."""
-    return pd.DataFrame(
-        {
-            "Module": [
-                "Synthetic Data Engine",
-                "ETL Platform",
-                "Database Layer",
-                "Analytics Engine",
-                "Forecasting",
-                "Anomaly Detection",
-                "Predictive Maintenance",
-                "Optimization Engine",
-                "Streamlit Application",
-            ],
-            "Status": [
-                "Operational",
-                "Operational",
-                "Operational",
-                "Operational",
-                "Operational",
-                "Operational",
-                "Operational",
-                "Operational",
-                "In Development",
-            ],
-            "Phase": [
-                "Phase 2",
-                "Phase 3",
-                "Phase 4",
-                "Phase 5",
-                "Phase 6",
-                "Phase 7",
-                "Phase 8",
-                "Phase 9",
-                "Phase 10",
-            ],
-        }
-    )
+def safe_configuration(active_settings: Settings) -> pd.DataFrame:
+    """Return explicitly allow-listed non-secret configuration values."""
+    available_fields = {field.name for field in fields(active_settings)}
+    rows = []
+    for name in SAFE_ADMIN_FIELDS:
+        if name not in available_fields:
+            continue
+        rows.append(
+            {
+                "Configuration": name.replace("_", " ").title(),
+                "Value": str(getattr(active_settings, name)),
+                "State": "Configured",
+            }
+        )
+    return pd.DataFrame(rows)
 
 
-@st.cache_data(show_spinner=False)
-def _environment_data() -> pd.DataFrame:
-    """Return temporary environment information."""
+def contains_sensitive_configuration(dataframe: pd.DataFrame) -> bool:
+    """Return whether rendered configuration names contain sensitive markers."""
+    if dataframe.empty:
+        return False
+    names = " ".join(dataframe["Configuration"].astype(str)).casefold()
+    return any(marker in names for marker in SENSITIVE_FIELD_MARKERS)
+
+
+def database_metadata() -> pd.DataFrame:
+    """Return static database architecture without making a runtime connection."""
     return pd.DataFrame(
         {
-            "Setting": [
-                "Application",
-                "Environment",
-                "Database",
-                "Time-Series Engine",
-                "Frontend",
-                "API",
-                "Version",
+            "Capability": [
+                "Database dialect",
+                "Configured database",
+                "Registered ORM tables",
+                "TimescaleDB extension",
+                "Hypertables",
+                "Continuous aggregates",
+                "Schema revision",
+                "Runtime database readiness",
             ],
             "Value": [
-                "Energy Operations Intelligence Platform",
-                "Development",
                 "PostgreSQL",
-                "TimescaleDB",
-                "Streamlit",
-                "FastAPI — Phase 11",
-                "0.10.0-dev",
+                settings.database_name,
+                str(len(Base.metadata.tables)),
+                "Supported by architecture; not verified",
+                "Not verified in this runtime",
+                "Not verified in this runtime",
+                "Not available",
+                "Not verified",
+            ],
+            "Evidence Type": [
+                "Static configuration",
+                "Static configuration",
+                "Application metadata",
+                "Repository capability",
+                "Runtime metadata unavailable",
+                "Runtime metadata unavailable",
+                "Migration metadata unavailable",
+                "No connection check performed",
             ],
         }
     )
 
 
-@st.cache_data(show_spinner=False)
-def _service_health_data() -> pd.DataFrame:
-    """Return temporary service-health information."""
+def api_capabilities() -> pd.DataFrame:
+    """Derive API capability categories from the configured FastAPI routes."""
+    try:
+        application = create_app()
+        capabilities: dict[str, int] = {}
+        for path_item in application.openapi()["paths"].values():
+            for operation in path_item.values():
+                for tag in operation.get("tags", ()):
+                    capabilities[str(tag)] = capabilities.get(str(tag), 0) + 1
+    except Exception:  # pragma: no cover - defensive runtime boundary
+        return pd.DataFrame(columns=("Capability", "Routes", "State"))
+    return pd.DataFrame(
+        [
+            {"Capability": name, "Routes": count, "State": "Configured"}
+            for name, count in sorted(capabilities.items())
+        ]
+    )
+
+
+def security_capabilities() -> pd.DataFrame:
+    """Describe configured security capabilities without activity claims."""
     return pd.DataFrame(
         {
-            "Service": [
-                "Application",
-                "PostgreSQL",
-                "TimescaleDB",
-                "Analytics Engine",
-                "Forecasting Engine",
-                "Anomaly Engine",
-                "Maintenance Engine",
-                "Optimization Engine",
+            "Capability": [
+                "Authentication",
+                "Token signing",
+                "Configured roles",
+                "Administration protection",
             ],
-            "Status": [
-                "Healthy",
-                "Healthy",
-                "Healthy",
-                "Healthy",
-                "Healthy",
-                "Healthy",
-                "Healthy",
-                "Healthy",
+            "Configuration": [
+                "OAuth2 bearer",
+                "HMAC signed expiring token",
+                ", ".join(role.value for role in Role),
+                "Administrator role required",
+            ],
+            "Runtime State": [
+                "Configured; not health-checked",
+                "Configured; secret hidden",
+                "Configured",
+                "Configured",
             ],
         }
     )
 
 
 def render() -> None:
-    """Render the EOIP Administration page."""
+    """Render the EOIP Platform Administration workspace."""
     render_page_intro(
-        title="Administration",
-        icon="⚙️",
+        title="Platform Administration",
+        icon="administration",
+        description="Read-only platform identity, configuration, and capabilities.",
+    )
+    render_page_context(PageContext(scope="Platform"))
+
+    render_section_header(
+        "Platform Identity",
         description=(
-            "Platform configuration, module status, environment "
-            "information, and system-health overview."
+            "Versioned application identity from package and API configuration."
+        ),
+    )
+    identity = pd.DataFrame(
+        {
+            "Property": [
+                "Application",
+                "Package Version",
+                "API Version",
+                "Environment",
+            ],
+            "Value": [
+                settings.project_name,
+                __version__,
+                settings.api_version,
+                settings.api_environment,
+            ],
+        }
+    )
+    render_dataframe(identity)
+
+    render_section_header(
+        "Configuration Summary",
+        description="Explicitly allow-listed non-secret configuration.",
+    )
+    configuration = safe_configuration(settings)
+    render_dataframe(configuration)
+
+    render_section_header(
+        "Data Platform",
+        description="Configured architecture separated from unverified runtime state.",
+    )
+    render_dataframe(database_metadata())
+
+    render_section_header(
+        "API & Application Capabilities",
+        description="Capability categories derived from registered FastAPI routes.",
+    )
+    capabilities = api_capabilities()
+    if capabilities.empty:
+        render_empty_state(
+            title="API metadata unavailable",
+            message="API route introspection was not available in this runtime.",
+        )
+    else:
+        render_dataframe(capabilities)
+
+    render_section_header(
+        "Security & Access",
+        description="Configured authentication and authorization capabilities only.",
+    )
+    render_dataframe(security_capabilities())
+
+    render_section_header(
+        "Runtime Readiness",
+        description="No database or service health checks run on dashboard rerenders.",
+    )
+    render_empty_state(
+        title="Runtime readiness not verified",
+        message=(
+            "This governance page reports configuration and detected capabilities; "
+            "it does not operate as a service monitor."
         ),
     )
 
-    render_status(
-        "EOIP platform services are operational.",
-        level="success",
-    )
-
-    render_section_header(
-        "Platform Overview",
-        description=("Current platform version and service-health indicators."),
-    )
-
-    render_metric_row(
-        (
-            MetricCard(
-                label="Platform Version",
-                value="0.10.0-dev",
-            ),
-            MetricCard(
-                label="Active Modules",
-                value="9",
-            ),
-            MetricCard(
-                label="Healthy Services",
-                value="8 / 8",
-            ),
-            MetricCard(
-                label="Environment",
-                value="Development",
-            ),
+    with st.expander("Technical detail"):
+        render_dataframe(
+            pd.DataFrame(
+                {
+                    "Registered ORM Table": sorted(Base.metadata.tables.keys()),
+                }
+            )
         )
-    )
-
-    st.write("")
-
-    left_column, right_column = st.columns((3, 2))
-
-    with left_column:
-        render_section_header(
-            "Platform Modules",
-            description=("Implementation status across EOIP engineering phases."),
-        )
-
-        render_dataframe(_platform_modules_data())
-
-    with right_column:
-        render_section_header(
-            "Environment",
-            description=("Current application and infrastructure configuration."),
-        )
-
-        render_dataframe(_environment_data())
-
-    render_section_header(
-        "Service Health",
-        description=("Current health state of major EOIP services and engines."),
-    )
-
-    render_dataframe(_service_health_data())
-
-    render_section_header(
-        "Application Settings",
-        description=("Development controls for the EOIP interface."),
-    )
-
-    first_column, second_column = st.columns(2)
-
-    with first_column:
-        st.selectbox(
-            "Default Dashboard",
-            options=[
-                "Executive Dashboard",
-                "Operations Dashboard",
-                "Plant Performance",
-                "Asset Dashboard",
-            ],
-            index=0,
-            key="admin_default_dashboard",
-        )
-
-        st.selectbox(
-            "Default Time Range",
-            options=[
-                "24 Hours",
-                "7 Days",
-                "30 Days",
-                "90 Days",
-            ],
-            index=1,
-            key="admin_default_time_range",
-        )
-
-    with second_column:
-        st.toggle(
-            "Enable forecast intelligence",
-            value=True,
-            key="admin_forecast_enabled",
-        )
-
-        st.toggle(
-            "Enable anomaly alerts",
-            value=True,
-            key="admin_anomaly_enabled",
-        )
-
-        st.toggle(
-            "Enable optimization recommendations",
-            value=True,
-            key="admin_optimization_enabled",
-        )
-
-    st.info(
-        "Administration controls currently demonstrate the Phase 10 "
-        "configuration interface. Persistent settings will be integrated "
-        "with the API and authorization layers in later phases."
-    )

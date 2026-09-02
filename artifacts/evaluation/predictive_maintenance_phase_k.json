@@ -1,0 +1,60 @@
+{
+  "area": "predictive_maintenance",
+  "criteria": [
+    {
+      "actual": null,
+      "criterion": "PR-AUC",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "pr_auc",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 0.80"
+    },
+    {
+      "actual": null,
+      "criterion": "ROC-AUC",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "roc_auc",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 0.90"
+    },
+    {
+      "actual": null,
+      "criterion": "Top-5%-risk recall",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "top_five_percent_recall",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 0.85"
+    },
+    {
+      "actual": null,
+      "criterion": "Precision",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "precision",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": ">= 0.80"
+    },
+    {
+      "actual": null,
+      "criterion": "Calibration evaluated",
+      "evidence": "No repository evaluation dataset/model run was available.",
+      "metric": "brier_score",
+      "notes": "",
+      "status": "NOT VERIFIED",
+      "target": "evaluation required; no quality threshold defined"
+    }
+  ],
+  "dataset": null,
+  "evaluated_at": "2026-08-26T00:00:00+00:00",
+  "evaluation_period": null,
+  "metadata": {
+    "calibration_bins": 10,
+    "top_risk_rounding": "ceil(n * 0.05), minimum 1"
+  },
+  "model_name": "failure prediction model",
+  "model_version": "unavailable",
+  "schema_version": "1.0"
+}

@@ -1,0 +1,94 @@
+{
+  "area": "forecasting",
+  "baseline": "Seasonal Naive",
+  "baseline_metrics": {
+    "bias": 0.5809024874043368,
+    "fold_count": 3,
+    "mae": 1.904342239232639,
+    "mape": 35.277603060912064,
+    "model_name": "Seasonal Naive",
+    "prediction_interval_coverage": null,
+    "rmse": 4.739307162470651,
+    "sample_count": 288,
+    "smape": 35.756581761402686,
+    "wape": 23.850910519165062
+  },
+  "candidate": {
+    "bias": -1.8344274696444502,
+    "fold_count": 3,
+    "mae": 3.1663855946398862,
+    "mape": 55.65054492833986,
+    "model_name": "Prophet",
+    "prediction_interval_coverage": 69.09722222222221,
+    "rmse": 4.083338508981959,
+    "sample_count": 288,
+    "smape": 123.14424173421546,
+    "wape": 39.65735671407503
+  },
+  "criteria": {
+    "absolute_bias_percent": {
+      "actual": 1.8344274696444502,
+      "status": "PASS",
+      "target": "<= 5%"
+    },
+    "mae_improvement_percent": {
+      "actual": -66.27187747071093,
+      "status": "FAIL",
+      "target": ">= 10%"
+    },
+    "prediction_interval_coverage_percent": {
+      "actual": 69.09722222222221,
+      "status": "FAIL",
+      "target": ">= 90%"
+    },
+    "rmse_improvement_percent": {
+      "actual": 13.841024246816886,
+      "status": "PASS",
+      "target": ">= 10%"
+    },
+    "wape_improvement_percent": {
+      "actual": -66.27187747071089,
+      "status": "FAIL",
+      "target": ">= 10%"
+    }
+  },
+  "dataset": "RUN-20250101T000000Z-20260827",
+  "evaluated_at": "2026-08-27T00:00:00+00:00",
+  "evidence_type": "REPRESENTATIVE_SYNTHETIC",
+  "fold_boundaries": [
+    {
+      "fold": 1,
+      "test_end": "2025-02-27T23:45:00+00:00",
+      "test_start": "2025-02-27T00:00:00+00:00",
+      "train_end": "2025-02-26T23:45:00+00:00",
+      "train_start": "2025-01-01T00:00:00+00:00"
+    },
+    {
+      "fold": 2,
+      "test_end": "2025-02-28T23:45:00+00:00",
+      "test_start": "2025-02-28T00:00:00+00:00",
+      "train_end": "2025-02-27T23:45:00+00:00",
+      "train_start": "2025-01-01T00:00:00+00:00"
+    },
+    {
+      "fold": 3,
+      "test_end": "2025-03-01T23:45:00+00:00",
+      "test_start": "2025-03-01T00:00:00+00:00",
+      "train_end": "2025-02-28T23:45:00+00:00",
+      "train_start": "2025-01-01T00:00:00+00:00"
+    }
+  ],
+  "fold_count": 3,
+  "horizon": "24 hours",
+  "horizon_observations": 96,
+  "limitations": [
+    "One representative plant; synthetic rather than production performance."
+  ],
+  "model_name": "Prophet",
+  "model_version": "Prophet repository implementation",
+  "phase": "L",
+  "plant_id": "PLANT-001",
+  "production_evidence": false,
+  "sample_count": 288,
+  "schema_version": "1.0"
+}

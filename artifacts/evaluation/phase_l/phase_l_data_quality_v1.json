@@ -1,0 +1,57 @@
+{
+  "area": "data_quality",
+  "criteria": {
+    "communication_availability": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": ">= 99.8%"
+    },
+    "duplicates": {
+      "actual": 0.0,
+      "status": "PASS",
+      "target": "< 0.1%"
+    },
+    "freshness": {
+      "actual": null,
+      "status": "NOT VERIFIED",
+      "target": "< 15 minutes"
+    },
+    "missing_records": {
+      "actual": 0.0,
+      "status": "PASS",
+      "target": "< 0.5%"
+    },
+    "sensor_validity": {
+      "actual": 99.95732060185185,
+      "status": "PASS",
+      "target": ">= 99%"
+    },
+    "telemetry_completeness": {
+      "actual": 100.0,
+      "status": "PASS",
+      "target": ">= 99.5%"
+    }
+  },
+  "dataset": "RUN-20250101T000000Z-20260827",
+  "evaluated_at": "2026-08-27T00:00:00+00:00",
+  "evidence_type": "REPRESENTATIVE_SYNTHETIC",
+  "metrics": {
+    "asset_count": 24,
+    "declared_valid_quality_percent": 97.5831886574074,
+    "duplicate_record_count": 0,
+    "duplicate_record_percent": 0.0,
+    "expected_slots": 138240,
+    "missing_record_count": 0,
+    "null_cell_count": 413324,
+    "null_cell_percent": 13.59046191077441,
+    "observed_unique_slots": 138240,
+    "sensor_invalid_values": 413,
+    "sensor_valid_values": 967267,
+    "sensor_validity_percent": 99.95732060185185,
+    "sensor_values_evaluated": 967680,
+    "telemetry_completeness_percent": 100.0
+  },
+  "phase": "L",
+  "production_evidence": false,
+  "schema_version": "1.0"
+}

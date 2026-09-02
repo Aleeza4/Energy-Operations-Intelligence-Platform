@@ -5,8 +5,11 @@ from eoip.forecasting.backtesting import (
     expanding_window_backtest,
 )
 from eoip.forecasting.comparison import (
+    ForecastBaselineComparison,
     ModelEvaluationSummary,
     aggregate_backtest_metrics,
+    calculate_error_improvement,
+    compare_model_summaries,
     evaluate_backtest_fold,
     rank_model_summaries,
 )
@@ -18,10 +21,13 @@ from eoip.forecasting.dataset import (
 )
 from eoip.forecasting.evaluation import (
     ForecastMetrics,
+    calculate_forecast_bias,
     calculate_mae,
     calculate_mape,
+    calculate_prediction_interval_coverage,
     calculate_rmse,
     calculate_smape,
+    calculate_wape,
     evaluate_forecast,
 )
 from eoip.forecasting.features import (
@@ -53,6 +59,7 @@ __all__ = [
     "BacktestFoldResult",
     "DatabaseForecastStore",
     "ForecastDataset",
+    "ForecastBaselineComparison",
     "ForecastMetrics",
     "ForecastModel",
     "ForecastPoint",
@@ -72,9 +79,14 @@ __all__ = [
     "aggregate_backtest_metrics",
     "build_forecast_dataset",
     "calculate_mae",
+    "calculate_error_improvement",
+    "calculate_forecast_bias",
     "calculate_mape",
+    "calculate_prediction_interval_coverage",
     "calculate_rmse",
     "calculate_smape",
+    "calculate_wape",
+    "compare_model_summaries",
     "evaluate_backtest_fold",
     "evaluate_forecast",
     "expanding_window_backtest",
