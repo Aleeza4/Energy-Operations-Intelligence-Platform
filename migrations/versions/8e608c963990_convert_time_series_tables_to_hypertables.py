@@ -11,6 +11,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from psycopg2.errors import FeatureNotSupported, UndefinedFile, UndefinedFunction
 
 revision: str = "8e608c963990"
 down_revision: str | Sequence[str] | None = "a1c9cbd16e30"
@@ -20,27 +21,61 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Convert SCADA and weather tables to TimescaleDB hypertables."""
-    op.execute(sa.text("""
-            CREATE EXTENSION IF NOT EXISTS timescaledb;
-            """))
+    try:
+        with op.get_bind().begin_nested():
+            op.execute(sa.text("""
+                CREATE EXTENSION IF NOT EXISTS timescaledb;
+                """))
+    except (FeatureNotSupported, UndefinedFile, sa.exc.DBAPIError) as error:
+        if not isinstance(
+            error, (FeatureNotSupported, UndefinedFile)
+        ) and not isinstance(error.orig, (FeatureNotSupported, UndefinedFile)):
+            raise
+        print(
+            "WARNING: TimescaleDB is not available in this environment; "
+            "skipping hypertable conversion."
+        )
+        return
 
-    op.execute(sa.text("""
-            SELECT create_hypertable(
-                'scada_observations',
-                by_range('timestamp', INTERVAL '1 day'),
-                if_not_exists => TRUE,
-                migrate_data => TRUE
-            );
-            """))
+    try:
+        with op.get_bind().begin_nested():
+            op.execute(sa.text("""
+                SELECT create_hypertable(
+                    'scada_observations',
+                    by_range('timestamp', INTERVAL '1 day'),
+                    if_not_exists => TRUE,
+                    migrate_data => TRUE
+                );
+                """))
+    except (FeatureNotSupported, UndefinedFunction, sa.exc.DBAPIError) as error:
+        if not isinstance(
+            error, (FeatureNotSupported, UndefinedFunction)
+        ) and not isinstance(error.orig, (FeatureNotSupported, UndefinedFunction)):
+            raise
+        print(
+            "WARNING: TimescaleDB hypertables are not supported; "
+            "skipping scada_observations conversion."
+        )
 
-    op.execute(sa.text("""
-            SELECT create_hypertable(
-                'weather_observations',
-                by_range('timestamp', INTERVAL '1 day'),
-                if_not_exists => TRUE,
-                migrate_data => TRUE
-            );
-            """))
+    try:
+        with op.get_bind().begin_nested():
+            op.execute(sa.text("""
+                SELECT create_hypertable(
+                    'weather_observations',
+                    by_range('timestamp', INTERVAL '1 day'),
+                    if_not_exists => TRUE,
+                    migrate_data => TRUE
+                );
+                """))
+    except (FeatureNotSupported, UndefinedFunction, sa.exc.DBAPIError) as error:
+        if not isinstance(
+            error, (FeatureNotSupported, UndefinedFunction)
+        ) and not isinstance(error.orig, (FeatureNotSupported, UndefinedFunction)):
+            raise
+        print(
+            "WARNING: TimescaleDB hypertables are not supported; "
+            "skipping weather_observations conversion."
+        )
 
 
 def downgrade() -> None:

@@ -55,13 +55,10 @@ SQL_VIEWS_DIR: Path = SQL_DIR / "views"
 SQL_ANALYTICS_DIR: Path = SQL_DIR / "analytics"
 
 # ---------------------------------------------------------------------
-# Database defaults
+# Database configuration
 # ---------------------------------------------------------------------
-
-DEFAULT_DATABASE_HOST: str = "localhost"
-DEFAULT_DATABASE_PORT: int = 5432
-DEFAULT_DATABASE_NAME: str = "eoip"
-DEFAULT_DATABASE_USER: str = "postgres"
+# EOIP uses the single required environment variable EOIP_DATABASE_URL.
+# Local hardcoded host/user/password defaults are intentionally not kept here.
 
 # ---------------------------------------------------------------------
 # Time-series standards

@@ -88,3 +88,8 @@ desktop.ini
 .pytest-tmp-*
 
 .pytest-tmp-*
+eoip_local_backup.sql
+_gen_migrate.py
+migrate_local_to_neon.py
+scripts/generate_synthetic_data.py
+*.sql

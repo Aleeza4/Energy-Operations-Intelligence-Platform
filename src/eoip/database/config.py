@@ -2,20 +2,27 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from urllib.parse import quote_plus
+
+from dotenv import load_dotenv
+
+from eoip.core.constants import PROJECT_ROOT
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 @dataclass(frozen=True, slots=True)
 class DatabaseConfig:
     """Configuration used to connect to PostgreSQL."""
 
-    host: str = "localhost"
-    port: int = 5432
-    database: str = "eoip"
-    username: str = "postgres"
-    password: str = "postgres"
-
+    host: str | None = None
+    port: int | None = None
+    database: str | None = None
+    username: str | None = None
+    password: str | None = None
+    database_url: str | None = None
     echo_sql: bool = False
     pool_size: int = 10
     max_overflow: int = 20
@@ -24,32 +31,27 @@ class DatabaseConfig:
 
     def __post_init__(self) -> None:
         """Validate database configuration."""
-        if not isinstance(self.host, str):
-            raise TypeError("host must be a string.")
+        env_database_url = os.getenv("EOIP_DATABASE_URL")
+        if self.database_url is None:
+            self.database_url = env_database_url
 
-        if not self.host.strip():
-            raise ValueError("host cannot be empty.")
+        if self.database_url is not None and not self.database_url.strip():
+            self.database_url = None
 
-        if isinstance(self.port, bool) or not isinstance(self.port, int):
-            raise TypeError("port must be an integer.")
-
-        if not 1 <= self.port <= 65_535:
-            raise ValueError("port must be between 1 and 65535.")
-
-        if not isinstance(self.database, str):
-            raise TypeError("database must be a string.")
-
-        if not self.database.strip():
-            raise ValueError("database cannot be empty.")
-
-        if not isinstance(self.username, str):
-            raise TypeError("username must be a string.")
-
-        if not self.username.strip():
-            raise ValueError("username cannot be empty.")
-
-        if not isinstance(self.password, str):
-            raise TypeError("password must be a string.")
+        if self.database_url is None:
+            if not self.host or not self.database or not self.username:
+                raise RuntimeError(
+                    "EOIP_DATABASE_URL is not set. Set it in your environment or .env "
+                    "before starting the app."
+                )
+            port = self.port or 5432
+            password = self.password or ""
+            username = quote_plus(self.username)
+            password = quote_plus(password)
+            self.database_url = (
+                f"postgresql+psycopg2://{username}:{password}@{self.host}:{port}/"
+                f"{self.database}"
+            )
 
         if not isinstance(self.echo_sql, bool):
             raise TypeError("echo_sql must be a boolean.")
@@ -71,13 +73,12 @@ class DatabaseConfig:
     @property
     def connection_url(self) -> str:
         """Return the SQLAlchemy PostgreSQL connection URL."""
-        username = quote_plus(self.username)
-        password = quote_plus(self.password)
-
-        return (
-            f"postgresql+psycopg2://{username}:{password}"
-            f"@{self.host}:{self.port}/{self.database}"
-        )
+        if not self.database_url or not self.database_url.strip():
+            raise RuntimeError(
+                "EOIP_DATABASE_URL is not set. Set it in your environment or .env "
+                "before starting the app."
+            )
+        return self.database_url
 
 
 __all__ = ["DatabaseConfig"]

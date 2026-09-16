@@ -103,3 +103,5 @@ services:
 
 volumes:
   eoip_timescale_data:
+    external: true
+    name: eoip_phase_o_data

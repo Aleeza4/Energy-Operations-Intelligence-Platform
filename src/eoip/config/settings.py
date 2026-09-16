@@ -10,18 +10,11 @@ from __future__ import annotations
 import os
 import secrets
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
-from eoip.core.constants import (
-    DEFAULT_DATABASE_HOST,
-    DEFAULT_DATABASE_NAME,
-    DEFAULT_DATABASE_PORT,
-    DEFAULT_DATABASE_USER,
-    DEFAULT_LOG_LEVEL,
-    PROJECT_NAME,
-    PROJECT_ROOT,
-)
+from eoip.core.constants import DEFAULT_LOG_LEVEL, PROJECT_NAME, PROJECT_ROOT
 
 # Load .env if it exists.
 load_dotenv(PROJECT_ROOT / ".env")
@@ -32,37 +25,54 @@ def _get_env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
+def _database_url_parts() -> tuple[str, str, str, str, str]:
+    """Extract host, port, database, user, and password from EOIP_DATABASE_URL."""
+    database_url = _get_env("EOIP_DATABASE_URL", "")
+    if not database_url:
+        return ("", "", "", "", "")
+
+    parsed = urlparse(database_url)
+    host = parsed.hostname or ""
+    port = str(parsed.port or 5432)
+    database = parsed.path.lstrip("/") if parsed.path else ""
+    username = parsed.username or ""
+    password = parsed.password or ""
+    return host, port, database, username, password
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Immutable EOIP application settings."""
 
     project_name: str = PROJECT_NAME
 
+    database_url: str = _get_env("EOIP_DATABASE_URL", "")
+
     database_host: str = _get_env(
         "EOIP_DATABASE_HOST",
-        DEFAULT_DATABASE_HOST,
+        _database_url_parts()[0],
     )
 
     database_port: int = int(
         _get_env(
             "EOIP_DATABASE_PORT",
-            str(DEFAULT_DATABASE_PORT),
-        )
+            _database_url_parts()[1],
+        ) or 5432
     )
 
     database_name: str = _get_env(
         "EOIP_DATABASE_NAME",
-        DEFAULT_DATABASE_NAME,
+        _database_url_parts()[2],
     )
 
     database_user: str = _get_env(
         "EOIP_DATABASE_USER",
-        DEFAULT_DATABASE_USER,
+        _database_url_parts()[3],
     )
 
     database_password: str = _get_env(
         "EOIP_DATABASE_PASSWORD",
-        "",
+        _database_url_parts()[4],
     )
 
     log_level: str = _get_env(
