@@ -1,5 +1,11 @@
 # Energy Operations Intelligence Platform (EOIP)
 
+## Live Demo
+
+**[eoip-ui.onrender.com](https://eoip-ui.onrender.com)** — live, deployed application connected to a hosted PostgreSQL (Neon) database.
+
+*Note: hosted on Render's free tier, which sleeps after inactivity — first load may take 30-60 seconds to wake up.*
+
 ## Overview
 
 EOIP is a Python engineering and data platform for renewable-energy operations
@@ -12,9 +18,10 @@ The repository demonstrates how operational signals can move from validated
 data contracts into forecasting, anomaly investigation, maintenance attention,
 equipment-health views, and governed recommendations. Current empirical
 evidence is representative synthetic engineering evidence—not production-scale
-performance evidence. The Streamlit application currently reads deterministic
-application/demo datasets through `src/eoip/app/data_access.py`; it must not be
-described as a database-backed live application.
+performance evidence. The deployed application connects to a live PostgreSQL
+(Neon) database. Local development can optionally run against deterministic
+demo datasets through `src/eoip/app/data_access.py` for offline testing
+without database setup.
 
 ## Why EOIP exists
 
@@ -57,8 +64,9 @@ flowchart LR
     DEMO[Deterministic application datasets] --> UI
 ```
 
-The database path is implemented and configured but not Phase O-certified. The
-current UI path is the separate `data_access.py` demo boundary shown above.
+The deployed environment uses the PostgreSQL/TimescaleDB-compatible path shown
+above, hosted on Neon. The `data_access.py` demo boundary remains available for
+local development without a database connection.
 See [system architecture](docs/architecture/SYSTEM_ARCHITECTURE.md).
 
 ## Intelligence pipeline
